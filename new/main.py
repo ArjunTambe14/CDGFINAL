@@ -19,6 +19,9 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 30)
 title_font = pygame.font.SysFont(None, 70)
 small_font = pygame.font.SysFont(None, 24)
+POINTER_COLOR = (255, 215, 0)
+POINTER_SIZE = 12
+POINTER_OFFSET_X = -20
 
 # ===== PLAYER SETUP =====
 player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
@@ -95,6 +98,15 @@ health = 100
 max_health = 100
 weapon_level = 1
 armor_level = 0
+upgrade_costs = {
+    # Cost is keyed by current weapon level for upgrade to the next level
+    "weapon": {
+        1: 100,
+        2: 150,
+        3: 225,
+        4: 325,
+    }
+}
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -337,6 +349,25 @@ def draw_player(surface, player_rect):
     """Draw player using image."""
     img = load_player_image()
     surface.blit(img, (player_rect.x, player_rect.y))
+
+def draw_player_pointer(surface, player_rect, highlight=False):
+    """Draw a small pointer anchored to the player's left side when highlighting."""
+    if not highlight:
+        return
+    
+    center_y = player_rect.centery
+    tip_x = player_rect.left + POINTER_OFFSET_X
+    points = [
+        (tip_x + POINTER_SIZE, center_y - POINTER_SIZE // 2),
+        (tip_x, center_y),
+        (tip_x + POINTER_SIZE, center_y + POINTER_SIZE // 2),
+    ]
+    
+    # Pulse the pointer to make it attention-grabbing near interactables/NPCs
+    pulse = (math.sin(pygame.time.get_ticks() / 200) + 1) / 2  # 0..1
+    brightness = 0.6 + 0.4 * pulse
+    color = tuple(min(255, int(c * brightness)) for c in POINTER_COLOR)
+    pygame.draw.polygon(surface, color, points)
 
 def draw_npc(surface, x, y, npc_id):
     """Draw NPCs using images."""
@@ -806,9 +837,22 @@ while running:
     
     # Pickup items
     pickup_items()
+
+    # Detect nearby interactables/NPCs for highlighting and hints
+    near_object = False
+    for inter_obj in interactive_objects:
+        if player.colliderect(inter_obj["rect"].inflate(50, 50)):
+            near_object = True
+            break
+    if not near_object:
+        for npc_rect in npcs:
+            if player.colliderect(npc_rect.inflate(50, 50)):
+                near_object = True
+                break
     
     # Draw player
     draw_player(screen, player)
+    draw_player_pointer(screen, player, near_object)
     
     # Draw UI
     draw_hud(screen)
@@ -819,16 +863,6 @@ while running:
     draw_upgrade_shop(screen)
     
     # Show interaction hint
-    near_object = False
-    for inter_obj in interactive_objects:
-        if player.colliderect(inter_obj["rect"].inflate(50, 50)):
-            near_object = True
-            break
-    for npc_rect in npcs:
-        if player.colliderect(npc_rect.inflate(50, 50)):
-            near_object = True
-            break
-    
     if near_object and not dialogue_active and not upgrade_shop_visible:
         hint = small_font.render("Press F to Interact", True, (255, 255, 255))
         screen.blit(hint, (player.centerx - 40, player.top - 25))
