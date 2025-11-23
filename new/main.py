@@ -26,12 +26,12 @@ player_speed = 7
 current_room = [0, 0, 0]
 previous_room = tuple(current_room)
 
-# ===== SIMPLE IMAGE SYSTEM =====
+# ===== IMPROVED IMAGE SYSTEM =====
 ASSETS_DIR = "assets"
 image_cache = {}
 
 def load_image(name, width=None, height=None):
-    """Simple image loader with caching."""
+    """Improved image loader with transparency support."""
     cache_key = f"{name}_{width}x{height}" if width and height else name
     
     if cache_key in image_cache:
@@ -45,12 +45,12 @@ def load_image(name, width=None, height=None):
                 img = pygame.transform.scale(img, (width, height))
             image_cache[cache_key] = img
             return img
-    except:
-        pass
+    except Exception as e:
+        print(f"Error loading {filepath}: {e}")
     
-    # Fallback: colored rectangle
-    fallback = pygame.Surface((width or 50, height or 50))
-    fallback.fill((255, 0, 255))  # Magenta fallback
+    # Better fallback: semi-transparent surface
+    fallback = pygame.Surface((width or 50, height or 50), pygame.SRCALPHA)
+    fallback.fill((255, 0, 255, 128))  # Semi-transparent magenta
     image_cache[cache_key] = fallback
     return fallback
 
@@ -401,8 +401,9 @@ def draw_room(surface, level, row, col):
     if bg_img:
         surface.blit(bg_img, (0, 0))
     else:
-        # Fallback background
-        surface.fill((80, 120, 80))
+        # Fallback background - use era-appropriate color
+        era_colors = [(80, 120, 80), (20, 20, 60), (100, 70, 40)]
+        surface.fill(era_colors[level])
 
     # Draw objects
     for obj in room_info.get("objects", []):
@@ -447,7 +448,7 @@ def draw_hud(surface):
             y += 30
 
 def draw_minimap(surface, level, row, col):
-    """Draw minimap showing current room."""
+    """Draw minimap showing current room - FIXED COORDINATES."""
     if not map_visible:
         return
     
@@ -456,23 +457,25 @@ def draw_minimap(surface, level, row, col):
     map_x = ROOM_WIDTH - map_size - 20
     map_y = 20
     
+    # Draw map background
     pygame.draw.rect(surface, (0, 0, 0, 180), (map_x - 5, map_y - 5, map_size + 10, map_size + 10))
     
+    # Draw grid - FIXED: Invert rows so (0,0) appears at bottom-left in minimap
     for r in range(3):
         for c in range(3):
             x = map_x + c * cell_size
-            y = map_y + r * cell_size
+            y = map_y + (2 - r) * cell_size  # INVERT rows: 2-r instead of r
             rect = pygame.Rect(x, y, cell_size - 2, cell_size - 2)
             
             if r == row and c == col:
-                pygame.draw.rect(surface, (255, 255, 0), rect)
+                pygame.draw.rect(surface, (255, 255, 0), rect)  # Current room - yellow
             else:
-                pygame.draw.rect(surface, (100, 100, 100), rect)
+                pygame.draw.rect(surface, (100, 100, 100), rect)  # Other rooms - gray
     
+    # Room name
     room_name = room_data.get((level, row, col), {}).get("name", "Unknown")
     name_text = small_font.render(room_name, True, (255, 255, 255))
     surface.blit(name_text, (map_x, map_y + map_size + 10))
-
 def draw_quest_log(surface):
     """Draw quest log."""
     if not quest_log_visible:
