@@ -1,31 +1,21 @@
-### Updated complete Python script (full source)
-
-
 import pygame
 import sys
 import math
 import time
 import heapq
 
-# Optional: numpy for procedural sound generation (falls back if unavailable)
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except Exception:
-    HAS_NUMPY = False
-
 pygame.init()
-try:
-    pygame.mixer.init()
-except Exception:
-    pass
+pygame.mixer.init()
 
-# Window
+level_complete_sound = pygame.mixer.Sound("level_complete.mp3")
+death_sound = pygame.mixer.Sound("player_death.mp3")
+pygame.mixer.music.load("background.mp3")
+pygame.mixer.music.play(-1)
+
 WIDTH, HEIGHT = 600, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Maze Game Builder")
 
-# Colors
 BLACK = (10, 10, 10)
 WHITE = (245, 245, 245)
 RED = (220, 50, 50)
@@ -37,15 +27,12 @@ CYAN = (40, 200, 200)
 GRAY = (200, 200, 200)
 DARK = (40, 40, 40)
 
-# Gameplay constants
 CELL_SIZE = 40
 player_radius = 14
 player_speed = 3
 FPS = 60
 SPEED_BOOST_DURATION = 5.0
 
-# --- Level layouts (easy to edit) ---
-# Legend: 1=wall, 0=floor, S=start, E=exit, K=key/gem, D=danger, G=gate, B=speed boost
 level1 = [
     "1111111111",
     "1S00000001",
@@ -88,7 +75,6 @@ level3 = [
 
 LEVELS = [level1, level2, level3]
 
-# Game state
 level = 1
 lives = 3
 player_x, player_y = 0, 0
@@ -102,36 +88,6 @@ walls = []
 collectibles = []
 exit_pos = (0, 0)
 
-# Sound utilities (generate simple waveform noises if numpy is available)
-def make_sound(freq=440, length_ms=150, volume=0.3):
-    if not HAS_NUMPY:
-        return None
-    sr = 44100
-    t = np.linspace(0, length_ms/1000.0, int(sr * (length_ms/1000.0)), False)
-    # simple soft square-like tone with decay envelope
-    wave = 0.5 * np.sign(np.sin(2 * np.pi * freq * t)) * np.exp(-3 * t)
-    wave = (wave * (2**15 - 1) * volume).astype(np.int16)
-    stereo = np.column_stack((wave, wave))
-    try:
-        return pygame.sndarray.make_sound(stereo.copy())
-    except Exception:
-        return None
-
-# Pre-generate sounds with fallback
-SOUND_COLLECT = make_sound(880, 140, 0.25)
-SOUND_HURT = make_sound(220, 300, 0.35)
-SOUND_LEVELUP = make_sound(980, 220, 0.35)
-SOUND_WIN = make_sound(1320, 700, 0.45)
-SOUND_GATE = make_sound(440, 120, 0.12)
-
-def play_sound(s):
-    if s:
-        try:
-            s.play()
-        except Exception:
-            pass
-
-# Level loading and initialization
 def load_level(idx):
     global walls, danger_zones, collectibles, gate, enemy, player_x, player_y, exit_pos, required_collected, speed_boost_active, speed_boost_time
     layout = LEVELS[idx-1]
@@ -159,13 +115,10 @@ def load_level(idx):
             elif ch == 'D':
                 danger_zones.append(rect)
             elif ch == 'G':
-                # Gate starts closed to create a timing challenge
                 gate = {'x':x, 'y':y, 'open':False, 'timer':2, 'interval':2, 'last':time.time()}
     if idx == 3:
-        # place enemy at bottom-left area
         enemy = {'x':CELL_SIZE+CELL_SIZE//2, 'y':(len(layout)-2)*CELL_SIZE+CELL_SIZE//2, 'speed':2.0, 'path':[]}
 
-# Drawing helpers
 def draw_tile_with_shade(rect, base_color):
     pygame.draw.rect(screen, base_color, rect)
     inner = rect.inflate(-6, -6)
@@ -175,7 +128,6 @@ def draw_tile_with_shade(rect, base_color):
 
 def draw_maze():
     screen.fill(WHITE)
-    # floor pattern
     cols = WIDTH // CELL_SIZE + 1
     rows = HEIGHT // CELL_SIZE + 1
     for y in range(rows):
@@ -207,7 +159,6 @@ def draw_maze():
         gx, gy = gate['x']*CELL_SIZE, gate['y']*CELL_SIZE
         color = GREEN if gate['open'] else RED
         gr = pygame.Rect(gx, gy, CELL_SIZE, CELL_SIZE)
-        # animated gate rectangle
         if gate['open']:
             pygame.draw.rect(screen, (min(255, color[0]+40), color[1], color[2]), gr)
         else:
@@ -215,21 +166,17 @@ def draw_maze():
         pygame.draw.rect(screen, DARK, gr, 2)
 
     if enemy:
-        # draw enemy with simple shadow
-        shadow = (30, 0, 0)
-        pygame.draw.circle(screen, shadow, (int(enemy['x']), int(enemy['y'])+4), 16)
+        pygame.draw.circle(screen, (30, 0, 0), (int(enemy['x']), int(enemy['y'])+4), 16)
         pygame.draw.circle(screen, RED, (int(enemy['x']), int(enemy['y'])), 14)
-        pygame.draw.circle(screen, BLACK, (int(enemy['x'])-4, int(enemy['y'])-3), 3)
+        pygame.draw.circle(screen, BLACK, (int(enemy['x'])-4, int(enemy['y']-3)), 3)
 
-    # player
     p_color = CYAN if speed_boost_active and (time.time()-speed_boost_time)<SPEED_BOOST_DURATION else BLUE
     pygame.draw.circle(screen, p_color, (int(player_x), int(player_y)), player_radius)
     pygame.draw.circle(screen, WHITE, (int(player_x), int(player_y)), 6)
-    # exit
+
     pygame.draw.circle(screen, GREEN, (int(exit_pos[0]), int(exit_pos[1])), 14)
     pygame.draw.circle(screen, WHITE, (int(exit_pos[0]), int(exit_pos[1])), 6)
 
-    # HUD
     font = pygame.font.SysFont(None, 28)
     hud = font.render(f'Level: {level}   Lives: {lives}', True, BLACK)
     screen.blit(hud, (10, 8))
@@ -247,7 +194,6 @@ def draw_maze():
             stext = font.render(f'SPEED: {remaining:.1f}s', True, ORANGE)
             screen.blit(stext, (220, 36))
 
-# Collision and physics helpers
 def check_collision(x, y, size, rects):
     test_rect = pygame.Rect(x-size//2, y-size//2, size, size)
     for r in rects:
@@ -272,7 +218,6 @@ def check_enemy_collision(x, y, size):
         return test_rect.colliderect(e_rect)
     return False
 
-# A* pathfinding for enemy
 def a_star(start, goal, walls_set, grid_w, grid_h):
     open_set = []
     heapq.heappush(open_set, (0, start))
@@ -321,7 +266,6 @@ def update_enemy():
             enemy['x'] += (dx/dist)*enemy['speed']
             enemy['y'] += (dy/dist)*enemy['speed']
 
-# Gate timing
 def update_gate():
     if not gate:
         return
@@ -332,9 +276,7 @@ def update_gate():
         if gate['timer'] <= 0:
             gate['open'] = not gate['open']
             gate['timer'] = gate['interval']
-            play_sound(SOUND_GATE)
 
-# Message display helper
 def show_message(text, color, duration=1200):
     screen.fill(WHITE)
     font = pygame.font.SysFont(None, 56)
@@ -344,49 +286,38 @@ def show_message(text, color, duration=1200):
     pygame.display.flip()
     pygame.time.delay(duration)
 
-# Initialize first level
+def show_small_text(text, color, x, y):
+    font = pygame.font.SysFont(None, 28)
+    surf = font.render(text, True, color)
+    rect = surf.get_rect(center=(x, y))
+    screen.blit(surf, rect)
+    pygame.display.flip()
+    pygame.time.delay(600)
+
 load_level(level)
 
-# Input state
 moving_up = moving_down = moving_left = moving_right = False
 running = True
 clock = pygame.time.Clock()
 
-# Main loop
 while running:
     dt = clock.tick(FPS)/1000.0
 
-    # --- handle events first ---
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-            break
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP or event.key == pygame.K_w:
-                moving_up = True
-            elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                moving_down = True
-            elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                moving_left = True
-            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                moving_right = True
-            elif event.key == pygame.K_ESCAPE:
-                running = False
-                break
+            if event.key in (pygame.K_UP, pygame.K_w): moving_up = True
+            elif event.key in (pygame.K_DOWN, pygame.K_s): moving_down = True
+            elif event.key in (pygame.K_LEFT, pygame.K_a): moving_left = True
+            elif event.key in (pygame.K_RIGHT, pygame.K_d): moving_right = True
+            elif event.key == pygame.K_ESCAPE: running = False
         elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_UP or event.key == pygame.K_w:
-                moving_up = False
-            elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
-                moving_down = False
-            elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
-                moving_left = False
-            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
-                moving_right = False
+            if event.key in (pygame.K_UP, pygame.K_w): moving_up = False
+            elif event.key in (pygame.K_DOWN, pygame.K_s): moving_down = False
+            elif event.key in (pygame.K_LEFT, pygame.K_a): moving_left = False
+            elif event.key in (pygame.K_RIGHT, pygame.K_d): moving_right = False
 
-    if not running:
-        break
-
-    # --- player movement ---
     new_x, new_y = player_x, player_y
     dx = dy = 0
     if moving_up: dy -= 1
@@ -404,23 +335,20 @@ while running:
     new_x += dx * active_speed
     new_y += dy * active_speed
 
-    # Wall and gate collision
     gate_rects = []
     if gate and not gate['open']:
         gate_rects.append(pygame.Rect(gate['x']*CELL_SIZE, gate['y']*CELL_SIZE, CELL_SIZE, CELL_SIZE))
     if not check_collision(new_x, new_y, player_radius*2, walls + gate_rects):
         player_x, player_y = new_x, new_y
     else:
-        # Try sliding separately for smoother movement along walls
         if not check_collision(player_x, new_y, player_radius*2, walls + gate_rects):
             player_y = new_y
         elif not check_collision(new_x, player_y, player_radius*2, walls + gate_rects):
             player_x = new_x
 
-    # Danger collision (levels 2+)
     if level >= 2 and check_collision(player_x, player_y, player_radius*2, danger_zones):
+        death_sound.play()
         lives -= 1
-        play_sound(SOUND_HURT)
         if lives <= 0:
             show_message("GAME OVER", RED, 1800)
             running = False
@@ -430,76 +358,60 @@ while running:
             load_level(level)
             continue
 
-    # Collectibles
     c = check_collectible_collision(player_x, player_y, player_radius*2)
     if c and not c['collected']:
         c['collected'] = True
         if c['type'] == 'speed':
             speed_boost_active = True
             speed_boost_time = time.time()
-            play_sound(SOUND_COLLECT)
         elif c['type'] == 'required':
             required_collected = True
-            play_sound(SOUND_COLLECT)
 
-    # Enemy update & collision for level 3
     if level == 3 and enemy:
         update_enemy()
         if check_enemy_collision(player_x, player_y, player_radius*2):
+            death_sound.play()
             lives -= 1
-            play_sound(SOUND_HURT)
             if lives <= 0:
                 show_message("GAME OVER", RED, 1800)
                 running = False
                 break
             else:
-                show_message(f"Lost a life ({lives})", RED, 900)
+                show_small_text(f"Lost a life ({lives})", RED, player_x, player_y-40)
                 load_level(level)
                 continue
 
-    # Gate update
     if gate:
         update_gate()
 
-    # Exit logic
     exit_dist = math.hypot(player_x - exit_pos[0], player_y - exit_pos[1])
     if exit_dist < 20:
+        level_complete_sound.play()
         if level == 1:
             level = 2
             load_level(level)
-            play_sound(SOUND_LEVELUP)
             show_message("LEVEL 2!", GREEN, 900)
         elif level == 2:
-            # if there is a required key present anywhere and not collected, force collect
             if any(cc['type']=='required' and not cc['collected'] for cc in collectibles):
-                play_sound(SOUND_COLLECT)
-                show_message("Collect the key!", BLUE, 900)
-                # nudge player away so they don't immediately re-trigger
+                show_small_text("Collect the key!", BLUE, player_x, player_y-40)
                 player_x -= 30
             else:
                 level = 3
                 load_level(level)
-                play_sound(SOUND_LEVELUP)
                 show_message("LEVEL 3!", GREEN, 900)
         elif level == 3:
             if not required_collected:
-                play_sound(SOUND_COLLECT)
-                show_message("Find the blue key!", BLUE, 900)
+                show_small_text("You need the blue key!", RED, player_x, player_y-40)
                 player_x -= 30
             elif gate and not gate['open']:
-                play_sound(SOUND_GATE)
-                show_message("Gate is closed!", RED, 900)
+                show_small_text("Gate is closed!", RED, player_x, player_y-40)
                 player_x -= 30
             else:
-                play_sound(SOUND_WIN)
                 show_message("YOU WIN!", GREEN, 1600)
                 running = False
-                break
 
-    # Rendering
     draw_maze()
     pygame.display.flip()
 
-# Clean up
 pygame.quit()
 sys.exit()
