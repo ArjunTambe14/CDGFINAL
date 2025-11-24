@@ -13,7 +13,8 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-
+# ===== DEVELOPMENT MODE =====
+DEV_MODE = True  # Set to False when you're done testing
 # ===== SETUP =====
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
 pygame.display.set_caption("Chronicles of Time")
@@ -161,7 +162,7 @@ def load_smart_bg(level, row, col):
     background_mapping = {
         (0, 0, 0): "village",
         (0, 0, 1): "blacksmith", 
-        (0, 0, 2): "forest",
+        (0, 0, 2): "Screenshot_2025-11-23_at_8.40.55_PM-removebg-preview",
         (0, 1, 0): "goblincamp",
         (0, 1, 1): "castlebridge",
         (0, 1, 2): "courtyard",
@@ -366,9 +367,9 @@ room_data = {
     (0, 1, 0): {
         "name": "Goblin Camp",
         "objects": [
-            {"type": "rock", "x": 200, "y": 200, "width": 50, "height": 50},
-            {"type": "rock", "x": 550, "y": 250, "width": 50, "height": 50},
-            {"type": "campfire", "x": 400, "y": 300, "width": 60, "height": 60},
+            {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
+            {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
+            {"type": "invisible", "x": 600, "y": 200, "width": 120, "height": 100},
         ],
         "interactive": [
             {"type": "cage", "x": 400, "y": 500, "width": 70, "height": 70},
@@ -568,6 +569,22 @@ def draw_weapon_hud(surface):
 # ===== DRAWING FUNCTIONS =====
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     """Draw objects using images only."""
+    # For invisible barriers, only create collision rect, don't draw anything
+    if obj_type == "invisible":
+        rect = pygame.Rect(x, y, width, height)
+        colliders.append(rect)
+        
+        # Draw red outline in development mode
+        if DEV_MODE:
+            pygame.draw.rect(surface, (255, 0, 0), rect, 2)  # Red outline
+            # Optional: Add semi-transparent fill
+            debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            debug_surface.fill((255, 0, 0, 64))  # Semi-transparent red
+            surface.blit(debug_surface, (x, y))
+            
+        return rect
+    
+    # Rest of your existing code for visible objects...
     img = load_object_image(obj_type, width, height)
     surface.blit(img, (x, y))
     
@@ -754,11 +771,10 @@ def draw_minimap(surface, level, row, col):
     for r in range(3):
         for c in range(3):
             x = map_x + c * cell_size
-            y = map_y + (2 - r) * cell_size  # Invert the row coordinate
+            y = map_y + r * cell_size  # Fixed: r represents row from top to bottom
             rect = pygame.Rect(x, y, cell_size - 2, cell_size - 2)
             
-            # Check if this is the current room (note: r and row use same coordinate system)
-            if r == row and c == col:
+            if r == row and c == col:  # Now correctly matches game coordinates
                 pygame.draw.rect(surface, (255, 255, 0), rect)
             else:
                 pygame.draw.rect(surface, (100, 100, 100), rect)
