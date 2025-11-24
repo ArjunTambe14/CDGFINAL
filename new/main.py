@@ -2,6 +2,8 @@ import pygame
 import os
 import math
 
+# Core game loop for Chronicles of Time: handles movement, combat, UI, and progression.
+
 pygame.init()
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
 # ===== UPGRADE COSTS =====
@@ -273,6 +275,7 @@ interactive_objects = []
 goblin_rooms = {}
 
 GOBLIN_WAVES = {
+    # Forest Path spawns three waves: 2, then 3, then 3 chasing goblins.
     (0, 0, 2): [
         [(350, 350), (200, 420)],  # wave 1: 2 goblins
         [(450, 260), (280, 520), (600, 420)],  # wave 2: 3 goblins
@@ -283,6 +286,7 @@ GOBLIN_WAVES = {
 def _init_goblin_rooms():
     """Prepare goblin wave state for configured rooms."""
     for room_key, waves in GOBLIN_WAVES.items():
+        # Each room tracks active wave, pending respawn timer, and live enemies.
         goblin_rooms[room_key] = {
             "waves": waves,
             "wave_index": 0,
@@ -446,7 +450,7 @@ room_data = {
 goblin_states = {}
 
 def _init_goblins():
-    """Seed goblin enemy state from room data."""
+    """Seed legacy goblin state from room data (initial wave positions)."""
     forest_key = (0, 0, 2)
     forest_info = room_data.get(forest_key, {})
     spawn = []
@@ -520,6 +524,7 @@ def update_bullets(dt):
                 if goblin_rect.collidepoint(bullet["x"], bullet["y"]):
                     goblin["alive"] = False
                     if not goblin.get("loot_given"):
+                        # Simple loot drop: each goblin yields 10 gold once.
                         inventory["Gold"] += 10
                         goblin["loot_given"] = True
                         message_text = "+10 Gold (Goblin)"
@@ -649,7 +654,7 @@ def draw_room(surface, level, row, col):
     """Draw the current room using images only."""
     global colliders, gold_items, herbs, potions, npcs, interactive_objects
 
-    # Clear all lists
+    # Clear dynamic lists before repopulating this frame
     colliders = []
     gold_items = []
     herbs = []
@@ -1359,6 +1364,7 @@ while running:
     mouse_x, mouse_y = pygame.mouse.get_pos()
     
     # ===== SCREEN RENDERING =====
+    # Route to the appropriate scene based on game_state.
     if game_state == "main_menu":
         play_button, how_to_button, about_button = draw_main_menu()
     
@@ -1383,6 +1389,7 @@ while running:
         # Keep current direction if mouse is near center
         # If only vertical movement or no movement, keep current direction
         
+        # Freeze movement when UI overlays or dialogue are active
         if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
             mv_x, mv_y = 0, 0
         
