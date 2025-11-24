@@ -206,6 +206,8 @@ health = 100
 max_health = 100
 weapon_level = 1
 armor_level = 0
+GOBLIN_CONTACT_DAMAGE = 10
+goblin_contact_cooldown = 0.0  # seconds of i-frames after a goblin hit
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -1176,8 +1178,11 @@ def update_goblins(dt):
         return
     if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
         return
+    global goblin_contact_cooldown, health
 
     dt_sec = dt / 1000.0
+    goblin_contact_cooldown = max(0.0, goblin_contact_cooldown - dt_sec)
+
     # Spawn next wave when current is cleared
     if not any(g.get("alive", True) for g in state["active"]):
         if state["wave_index"] < len(state["waves"]):
@@ -1209,6 +1214,13 @@ def update_goblins(dt):
         goblin["x"] = max(0, min(ROOM_WIDTH - w, goblin["x"]))
         goblin["y"] = max(0, min(ROOM_HEIGHT - h, goblin["y"]))
 
+        # Contact damage
+        goblin_rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
+        if goblin_rect.colliderect(player) and goblin_contact_cooldown <= 0:
+            health = max(0, health - GOBLIN_CONTACT_DAMAGE)
+            goblin_contact_cooldown = 0.75
+            set_message(f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
+
 def pickup_items():
     """Handle item collection."""
     global message, message_timer, message_color
@@ -1236,7 +1248,10 @@ def pickup_items():
 def set_message(text, color, duration):
     """Helper to queue on-screen messages safely."""
     global message, message_timer, message_color
-    message, message_color, message_timer = text, color, duration
+    message = text
+    message_color = color
+    # Clamp duration to avoid negative timers
+    message_timer = max(0.0, float(duration)) if duration is not None else 0.0
 
 def handle_interaction():
     """Handle F key interactions."""
