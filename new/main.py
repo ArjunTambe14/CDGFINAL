@@ -2,6 +2,8 @@ import pygame
 import os
 import math
 
+# Core game loop for Chronicles of Time: handles movement, combat, UI, and progression.
+
 pygame.init()
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
 # ===== UPGRADE COSTS =====
@@ -160,7 +162,7 @@ def load_smart_bg(level, row, col):
     background_mapping = {
         (0, 0, 0): "village",
         (0, 0, 1): "blacksmith", 
-        (0, 0, 2): "forest",
+        (0, 0, 2): "Screenshot_2025-11-23_at_8.40.55_PM-removebg-preview",
         (0, 1, 0): "goblincamp",
         (0, 1, 1): "castlebridge",
         (0, 1, 2): "courtyard",
@@ -186,8 +188,15 @@ def load_object_image(obj_type, width, height):
 def load_item_image(item_type):
     return load_image(f"items/{item_type}.png", 25, 25)
 
+def get_npc_size(npc_type):
+    """Return sprite size overrides for specific NPCs."""
+    if npc_type == "goblin":
+        return (50, 70)
+    return (35, 55)
+
 def load_npc_image(npc_type):
-    return load_image(f"npcs/{npc_type}.png", 35, 55)
+    w, h = get_npc_size(npc_type)
+    return load_image(f"npcs/{npc_type}.png", w, h)
 
 # ===== GAME STATE =====
 health = 100
@@ -264,6 +273,29 @@ herbs = []
 potions = []
 npcs = []
 interactive_objects = []
+goblin_rooms = {}
+
+GOBLIN_WAVES = {
+    # Forest Path spawns three waves: 2, then 3, then 3 chasing goblins.
+    (0, 0, 2): [
+        [(350, 350), (200, 420)],  # wave 1: 2 goblins
+        [(450, 260), (280, 520), (600, 420)],  # wave 2: 3 goblins
+        [(180, 180), (520, 180), (420, 620)],  # wave 3: 3 goblins
+    ],
+}
+
+def _init_goblin_rooms():
+    """Prepare goblin wave state for configured rooms."""
+    for room_key, waves in GOBLIN_WAVES.items():
+        # Each room tracks active wave, pending respawn timer, and live enemies.
+        goblin_rooms[room_key] = {
+            "waves": waves,
+            "wave_index": 0,
+            "active": [],
+            "respawn": 0.0,  # seconds until next wave
+        }
+
+_init_goblin_rooms()
 
 # ===== ROOM DATA SYSTEM =====
 room_data = {
@@ -311,7 +343,10 @@ room_data = {
             {"type": "tree", "x": 600, "y": 600, "width": 60, "height": 100},
         ],
         "interactive": [],
-        "npcs": [],
+        "npcs": [
+            {"id": "goblin", "x": 350, "y": 350, "name": "Goblin Scout"},
+            {"id": "goblin", "x": 200, "y": 420, "name": "Goblin Scout"},
+        ],
         "items": [
             {"type": "herb", "x": 300, "y": 300, "id": "herb_0_0_2_1"},
             {"type": "herb", "x": 550, "y": 150, "id": "herb_0_0_2_2"},
@@ -413,6 +448,21 @@ room_data = {
     },
 }
 
+goblin_states = {}
+
+def _init_goblins():
+    """Seed legacy goblin state from room data (initial wave positions)."""
+    forest_key = (0, 0, 2)
+    forest_info = room_data.get(forest_key, {})
+    spawn = []
+    for npc in forest_info.get("npcs", []):
+        if npc.get("id") == "goblin":
+            spawn.append({"x": npc["x"], "y": npc["y"], "alive": True})
+    if spawn:
+        goblin_states[forest_key] = spawn
+
+_init_goblins()
+
 # ===== WEAPON FUNCTIONS =====
 def shoot_bullet():
     """Shoot a bullet towards the mouse position."""
@@ -461,6 +511,27 @@ def update_bullets(dt):
         if (bullet["x"] < 0 or bullet["x"] > ROOM_WIDTH or 
             bullet["y"] < 0 or bullet["y"] > ROOM_HEIGHT):
             bullets_to_remove.append(i)
+            continue
+
+        # Hit detection on goblins in the current room
+        room_key = tuple(current_room)
+        state = goblin_rooms.get(room_key)
+        if state:
+            w, h = get_npc_size("goblin")
+            for goblin in state["active"]:
+                if not goblin.get("alive", True):
+                    continue
+                goblin_rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
+                if goblin_rect.collidepoint(bullet["x"], bullet["y"]):
+                    goblin["alive"] = False
+                    if not goblin.get("loot_given"):
+                        # Simple loot drop: each goblin yields 10 gold once.
+                        inventory["Gold"] += 10
+                        goblin["loot_given"] = True
+                        message_text = "+10 Gold (Goblin)"
+                        set_message(message_text, (255, 215, 0), 1.5)
+                    bullets_to_remove.append(i)
+                    break
     
     # Remove bullets
     for i in sorted(bullets_to_remove, reverse=True):
@@ -542,10 +613,25 @@ def draw_npc(surface, x, y, npc_id):
     """Draw NPCs using images."""
     img = load_npc_image(npc_id)
     surface.blit(img, (x, y))
-    rect = pygame.Rect(x, y, 35, 55)
+    w, h = get_npc_size(npc_id)
+    rect = pygame.Rect(x, y, w, h)
     colliders.append(rect)
     npcs.append(rect)
     return rect
+
+def draw_goblins(surface, room_key):
+    """Draw goblin enemies for the current room."""
+    state = goblin_rooms.get(room_key)
+    if not state:
+        return
+    w, h = get_npc_size("goblin")
+    for goblin in state["active"]:
+        if not goblin.get("alive", True):
+            continue
+        img = load_npc_image("goblin")
+        surface.blit(img, (goblin["x"], goblin["y"]))
+        rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
+        colliders.append(rect)
 
 def draw_item(surface, x, y, item_type, item_id):
     """Draw items using images."""
@@ -585,7 +671,7 @@ def draw_room(surface, level, row, col):
     """Draw the current room using images only."""
     global colliders, gold_items, herbs, potions, npcs, interactive_objects
 
-    # Clear all lists
+    # Clear dynamic lists before repopulating this frame
     colliders = []
     gold_items = []
     herbs = []
@@ -614,7 +700,12 @@ def draw_room(surface, level, row, col):
 
     # Draw NPCs
     for npc in room_info.get("npcs", []):
+        if npc.get("id") == "goblin":
+            continue  # Goblins are handled by enemy system
         draw_npc(surface, npc["x"], npc["y"], npc["id"])
+
+    # Draw enemies
+    draw_goblins(surface, room_key)
 
     # Draw items
     for item in room_info.get("items", []):
@@ -1015,6 +1106,47 @@ def room_transition():
         else:
             player.bottom = ROOM_HEIGHT
 
+def update_goblins(dt):
+    """Move goblins toward the player in the Forest Path."""
+    room_key = tuple(current_room)
+    state = goblin_rooms.get(room_key)
+    if not state:
+        return
+    if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
+        return
+
+    dt_sec = dt / 1000.0
+    # Spawn next wave when current is cleared
+    if not any(g.get("alive", True) for g in state["active"]):
+        if state["wave_index"] < len(state["waves"]):
+            state["respawn"] -= dt_sec
+            if state["respawn"] <= 0:
+                spawn = state["waves"][state["wave_index"]]
+                state["active"] = [{"x": float(x), "y": float(y), "alive": True, "loot_given": False} for x, y in spawn]
+                state["wave_index"] += 1
+                state["respawn"] = 1.0  # prepare next delay
+                set_message("Goblins incoming!", (255, 180, 50), 1.0)
+        return
+
+    # Chase the player
+    w, h = get_npc_size("goblin")
+    speed = 140  # pixels per second
+    for goblin in state["active"]:
+        if not goblin.get("alive", True):
+            continue
+        gx = goblin["x"] + w / 2
+        gy = goblin["y"] + h / 2
+        dx = player.centerx - gx
+        dy = player.centery - gy
+        dist = math.hypot(dx, dy)
+        if dist <= 1:
+            continue
+        step = speed * dt_sec
+        goblin["x"] += (dx / dist) * step
+        goblin["y"] += (dy / dist) * step
+        goblin["x"] = max(0, min(ROOM_WIDTH - w, goblin["x"]))
+        goblin["y"] = max(0, min(ROOM_HEIGHT - h, goblin["y"]))
+
 def pickup_items():
     """Handle item collection."""
     global message, message_timer, message_color
@@ -1039,6 +1171,11 @@ def pickup_items():
             collected_potions.add((*current_room, x, y))
             message, message_color, message_timer = "+1 Health Potion", (255, 0, 0), 1.5
 
+def set_message(text, color, duration):
+    """Helper to queue on-screen messages safely."""
+    global message, message_timer, message_color
+    message, message_color, message_timer = text, color, duration
+
 def handle_interaction():
     """Handle F key interactions."""
     global dialogue_active, current_dialogue, dialogue_index, upgrade_shop_visible
@@ -1057,7 +1194,10 @@ def handle_interaction():
     for npc_rect in npcs:
         if player.colliderect(npc_rect.inflate(50, 50)):
             for npc in room_data.get(room_key, {}).get("npcs", []):
-                npc_rect_check = pygame.Rect(npc["x"], npc["y"], 35, 55)
+                if npc.get("id") == "goblin":
+                    continue  # Enemies are not interactable NPCs
+                w, h = get_npc_size(npc["id"])
+                npc_rect_check = pygame.Rect(npc["x"], npc["y"], w, h)
                 if npc_rect_check.colliderect(npc_rect):
                     dialogue_key = (room_key[0], room_key[1], room_key[2], npc["id"])
                     if dialogue_key in npc_dialogues:
@@ -1240,6 +1380,7 @@ while running:
     mouse_x, mouse_y = pygame.mouse.get_pos()
     
     # ===== SCREEN RENDERING =====
+    # Route to the appropriate scene based on game_state.
     if game_state == "main_menu":
         play_button, how_to_button, about_button = draw_main_menu()
     
@@ -1264,10 +1405,14 @@ while running:
         # Keep current direction if mouse is near center
         # If only vertical movement or no movement, keep current direction
         
+        # Freeze movement when UI overlays or dialogue are active
         if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
             mv_x, mv_y = 0, 0
         
         dx, dy = mv_x * player_speed, mv_y * player_speed
+        
+        # Update enemy movement before drawing the room
+        update_goblins(dt)
         
         # Draw room
         draw_room(screen, *current_room)
