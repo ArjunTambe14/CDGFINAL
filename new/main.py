@@ -212,11 +212,7 @@ def get_npc_size(npc_type):
     elif npc_type == "boss1":
         return (100, 120) 
     elif npc_type == "herbcollector":
-<<<<<<< HEAD
-        return (70, 90)  
-=======
         return (70, 90)  # Larger herb collector (increased from 50,70)
->>>>>>> cdgfinal/dev
     elif npc_type == "knight":
         return (50, 70) 
     return (35, 55)
@@ -347,13 +343,6 @@ npc_dialogues = {
         "Knight Aelric: I dropped my key when they captured me - you should find it nearby.",
         "Quest Updated: Defeat the Goblin King"
     ],
-<<<<<<< HEAD
-    (0, 2, 1, "herbcollector_with_herbs"): [
-        "Herb Collector: Thank you for the herbs!",
-        "Herb Collector: As promised, here's the safe code: 4231",
-        "Herb Collector: Use it to open the safe in this room.",
-        "Quest Updated: Safe code received!"
-=======
     (0, 2, 1, "herbcollector"): [
         "Herb Collector: Ah, a traveler! I collect rare herbs from the forest.",
         "Herb Collector: If you bring me 3 herbs, I can give you something useful.",
@@ -364,7 +353,6 @@ npc_dialogues = {
         "Herb Collector: As promised, here's the safe combination: 4231",
         "Herb Collector: The safe contains something valuable for your journey.",
         "Quest Updated: Safe combination received!"
->>>>>>> cdgfinal/dev
     ],
 }
 
@@ -456,27 +444,6 @@ room_data = {
         ]
     },
     
-<<<<<<< HEAD
-(0, 1, 0): {
-    "name": "Goblin Camp",
-    "objects": [
-        {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
-        {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
-        {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
-        {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
-    ],
-    "interactive": [
-        {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  
-    ],
-    "npcs": [
-        {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  
-    ],
-    "items": [
-        {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
-        {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
-    ]
-},
-=======
     (0, 1, 0): {
         "name": "Goblin Camp",
         "objects": [
@@ -497,7 +464,6 @@ room_data = {
             # Key will be dropped when knight is rescued
         ]
     },
->>>>>>> cdgfinal/dev
     
     (0, 1, 1): {
         "name": "Castle Bridge",
@@ -592,11 +558,7 @@ def init_boss():
         "alive": True,
         "last_direction": "right"
     }
-<<<<<<< HEAD
-    boss_max_health = max_health * 3 
-=======
     boss_max_health = max_health * 4  # QUADRUPLE player's health
->>>>>>> cdgfinal/dev
     boss_health = boss_max_health
     boss_attack_cooldown = 0
     boss_axe = {"x": 0, "y": 0, "angle": 0, "swinging": False}
@@ -616,22 +578,14 @@ def update_boss(dt):
     
     dt_sec = dt / 1000.0
     
-<<<<<<< HEAD
-=======
     # Update attack cooldowns
->>>>>>> cdgfinal/dev
     if boss_attack_cooldown > 0:
         boss_attack_cooldown -= dt_sec
     if boss_throw_cooldown > 0:
         boss_throw_cooldown -= dt_sec
     
-<<<<<<< HEAD
     # Boss movement 
     speed = 70  
-=======
-    # Boss movement - smart chasing with phase-based speed
-    speed = 70 if boss_phase == 1 else 100  # Faster in phase 2
->>>>>>> cdgfinal/dev
     dx = player.centerx - boss["rect"].centerx
     dy = player.centery - boss["rect"].centery
     dist = math.hypot(dx, dy)
@@ -650,13 +604,6 @@ def update_boss(dt):
         boss["rect"].x = max(100, min(ROOM_WIDTH - boss["rect"].width - 100, boss["rect"].x))
         boss["rect"].y = max(100, min(ROOM_HEIGHT - boss["rect"].height - 100, boss["rect"].y))
     
-<<<<<<< HEAD
-    # Attack if close enough and cooldown is ready
-    if dist < 180 and boss_attack_cooldown <= 0:
-        boss_axe_swinging = True
-        boss_axe_angle = 0
-        boss_attack_cooldown = 2.5  
-=======
     # Phase 1: Melee attacks
     if boss_phase == 1:
         if dist < 180 and boss_attack_cooldown <= 0:
@@ -675,7 +622,6 @@ def update_boss(dt):
         if dist > 200 and boss_throw_cooldown <= 0:
             throw_axe()
             boss_throw_cooldown = 3.0  # 3 second cooldown for throwing
->>>>>>> cdgfinal/dev
     
     # Handle axe swinging
     if boss_axe_swinging:
@@ -692,10 +638,6 @@ def update_boss(dt):
                     damage += 10  # More damage in phase 2
                 health = max(0, health - damage)
                 set_message(f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
-<<<<<<< HEAD
- 
-def calculate_axe_rect(): # asked ai to help us with this function
-=======
     
     # Update thrown axes
     update_thrown_axes(dt_sec)
@@ -752,7 +694,6 @@ def update_thrown_axes(dt_sec):
         boss_thrown_axes.pop(i)
 
 def calculate_axe_rect():
->>>>>>> cdgfinal/dev
     """Calculate the current position of the boss's axe."""
     if not boss:
         return pygame.Rect(0, 0, 0, 0)
@@ -790,8 +731,6 @@ def draw_boss(surface):
         
         surface.blit(rotated_axe, (axe_rect.x, axe_rect.y))
     
-<<<<<<< HEAD
-=======
     # Draw thrown axes
     for axe in boss_thrown_axes:
         axe_img = load_axe_image()
@@ -799,7 +738,6 @@ def draw_boss(surface):
         surface.blit(rotated_axe, (axe["x"] - 40, axe["y"] - 20))
     
     # Draw boss health bar with phase indicator
->>>>>>> cdgfinal/dev
     health_width = 300
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = 20
