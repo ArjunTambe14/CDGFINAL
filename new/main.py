@@ -13,6 +13,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
+DEV_MODE = True
 
 # ===== SETUP =====
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
@@ -393,18 +394,17 @@ room_data = {
     (0, 0, 0): {
         "name": "Village Square",
         "objects": [
-            {"type": "building", "x": 0, "y": 0, "width": 250, "height": 220},
-            {"type": "building", "x": 550, "y": 200, "width": 250, "height": 220},
-            {"type": "tree", "x": 100, "y": 500, "width": 100, "height": 100},
-            {"type": "tree", "x": 650, "y": 550, "width": 60, "height": 100},
+             {"type": "invisible", "x": 110, "y": 100, "width": 140, "height": 600},
+             {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
+              {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
         ],
         "interactive": [],
         "npcs": [
             {"id": "elder", "x": 400, "y": 600, "name": "Elder Rowan"},
         ],
         "items": [
-            {"type": "gold", "x": 150, "y": 300, "id": "gold_0_0_0_1"},
-            {"type": "gold", "x": 450, "y": 150, "id": "gold_0_0_0_2"},
+            {"type": "gold", "x": 40, "y": 300, "id": "gold_0_0_0_1"},
+            {"type": "gold", "x": 450, "y": 40, "id": "gold_0_0_0_2"},
         ]
     },
     
@@ -931,12 +931,33 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     if obj_type == "invisible":
         rect = pygame.Rect(x, y, width, height)
         colliders.append(rect)
+        
+        # Draw invisible barriers in development mode
+        if DEV_MODE:
+            # Create a semi-transparent red rectangle for visibility
+            debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            debug_surface.fill((255, 0, 0, 80))  # Semi-transparent red
+            surface.blit(debug_surface, (x, y))
+            # Add border to make it more visible
+            pygame.draw.rect(surface, (255, 0, 0), (x, y, width, height), 2)
+            # Add label
+            label_font = pygame.font.SysFont(None, 20)
+            label = label_font.render("INVISIBLE", True, (255, 255, 255))
+            surface.blit(label, (x + 5, y + 5))
+        
         return rect
     
     # For damage zones
     if obj_type == "damage":
         rect = pygame.Rect(x, y, width, height)
         damage_zones.append(rect)
+        
+        # Draw damage zones (always visible since they affect gameplay)
+        debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        debug_surface.fill((255, 100, 0, 60))  # Semi-transparent orange
+        surface.blit(debug_surface, (x, y))
+        pygame.draw.rect(surface, (255, 100, 0), (x, y, width, height), 2)
+        
         return rect
         
     # Rest of your existing code for visible objects...
