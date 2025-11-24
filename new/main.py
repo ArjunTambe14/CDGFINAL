@@ -1186,7 +1186,10 @@ def pickup_items():
 def set_message(text, color, duration):
     """Helper to queue on-screen messages safely."""
     global message, message_timer, message_color
-    message, message_color, message_timer = text, color, duration
+    message = text
+    message_color = color
+    # Clamp duration to avoid negative timers
+    message_timer = max(0.0, float(duration)) if duration is not None else 0.0
 
 def handle_interaction():
     """Handle F key interactions."""
