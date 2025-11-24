@@ -170,7 +170,7 @@ def load_smart_bg(level, row, col):
     background_mapping = {
         (0, 0, 0): "village",
         (0, 0, 1): "blacksmith", 
-        (0, 0, 2): "forest",
+        (0, 0, 2): "forestPath",
         (0, 1, 0): "goblincamp",
         (0, 1, 1): "castlebridge",
         (0, 1, 2): "courtyard",
@@ -213,6 +213,8 @@ def get_npc_size(npc_type):
         return (100, 120)  # Larger boss
     elif npc_type == "herbcollector":
         return (50, 70)  # Larger herb collector
+    elif npc_type == "knight":
+        return (50, 70)  # Knight size
     return (35, 55)
 
 def load_npc_image(npc_type):
@@ -263,6 +265,30 @@ safe_code = "4231"  # The code the herb collector gives
 safe_input = ""
 safe_unlocked = False
 safe_visible = False
+
+# ===== MAZE PUZZLE SYSTEM =====
+maze_visible = False
+maze_completed = False
+maze_player_pos = [1, 1]  # Starting position in the maze
+maze_exit_pos = [9, 9]    # Exit position in the maze
+maze_cell_size = 40
+maze_width = 11
+maze_height = 11
+
+# Maze layout: 0 = path, 1 = wall
+maze_layout = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+    [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+]
 
 # ===== BOSS SYSTEM =====
 boss = None
@@ -337,6 +363,10 @@ GOBLIN_WAVES = {
         [(350, 350), (200, 420)],  # wave 1: 2 goblins
         [(450, 260), (280, 520), (600, 420)],  # wave 2: 3 goblins
         [(180, 180), (520, 180), (420, 620)],  # wave 3: 3 goblins
+    ],
+    # Goblin Camp spawns 5 goblins
+    (0, 1, 0): [
+        [(100, 100), (200, 150), (300, 200), (400, 150), (500, 100)],  # 5 goblins
     ],
 }
 
@@ -421,12 +451,12 @@ room_data = {
             {"type": "cage", "x": 400, "y": 500, "width": 70, "height": 70},
         ],
         "npcs": [
-            {"id": "knight", "x": 430, "y": 530, "name": "Knight Aelric"},
+            {"id": "knight", "x": 430, "y": 530, "name": "Knight Aelric", "rescued": False},
         ],
         "items": [
             {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
             {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
-            {"type": "key", "x": 500, "y": 200, "id": "key_0_1_0_1"},  # Key in Goblin Camp
+            # Key will be dropped when knight is rescued
         ]
     },
     
@@ -886,14 +916,17 @@ def draw_player_pointer(surface, player_rect):
     ]
     pygame.draw.polygon(surface, POINTER_COLOR, points)
 
-def draw_npc(surface, x, y, npc_id):
+def draw_npc(surface, x, y, npc_id, rescued=False):
     """Draw NPCs using images."""
     img = load_npc_image(npc_id)
     surface.blit(img, (x, y))
     size = get_npc_size(npc_id)
     rect = pygame.Rect(x, y, size[0], size[1])
-    colliders.append(rect)
-    npcs.append(rect)
+    
+    # Only add collision if the NPC is not rescued (in cage)
+    if not rescued:
+        colliders.append(rect)
+        npcs.append(rect)
     return rect
 
 def draw_goblins(surface, room_key):
@@ -994,7 +1027,13 @@ def draw_room(surface, level, row, col):
     for npc in room_info.get("npcs", []):
         if npc.get("id") in ["goblin", "boss1"]:
             continue  # Goblins and boss are handled by enemy system
-        draw_npc(surface, npc["x"], npc["y"], npc["id"])
+        
+        # Check if knight is rescued
+        rescued = False
+        if npc.get("id") == "knight":
+            rescued = npc.get("rescued", False)
+        
+        draw_npc(surface, npc["x"], npc["y"], npc["id"], rescued)
 
     # Draw enemies
     draw_goblins(surface, room_key)
@@ -1283,6 +1322,113 @@ def draw_safe_puzzle(surface):
     
     return buttons, clear_rect, close_rect
 
+def draw_maze_puzzle(surface):
+    """Draw the maze puzzle interface."""
+    if not maze_visible:
+        return
+    
+    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    surface.blit(overlay, (0, 0))
+    
+    # Calculate maze position to center it
+    maze_total_width = maze_width * maze_cell_size
+    maze_total_height = maze_height * maze_cell_size
+    maze_x = (ROOM_WIDTH - maze_total_width) // 2
+    maze_y = (ROOM_HEIGHT - maze_total_height) // 2
+    
+    # Draw maze background
+    maze_bg = pygame.Rect(maze_x - 10, maze_y - 40, maze_total_width + 20, maze_total_height + 80)
+    pygame.draw.rect(surface, (40, 40, 60), maze_bg)
+    pygame.draw.rect(surface, (255, 215, 0), maze_bg, 3)
+    
+    # Draw title
+    title = font.render("MAZE PUZZLE - Free the Knight!", True, (255, 215, 0))
+    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, maze_y - 30))
+    
+    # Draw instructions
+    instructions = small_font.render("Use arrow keys to navigate to the exit (green square)", True, (200, 200, 200))
+    surface.blit(instructions, (ROOM_WIDTH//2 - instructions.get_width()//2, maze_y + maze_total_height + 10))
+    
+    # Draw maze
+    for y in range(maze_height):
+        for x in range(maze_width):
+            cell_x = maze_x + x * maze_cell_size
+            cell_y = maze_y + y * maze_cell_size
+            cell_rect = pygame.Rect(cell_x, cell_y, maze_cell_size, maze_cell_size)
+            
+            if maze_layout[y][x] == 1:  # Wall
+                pygame.draw.rect(surface, (80, 80, 120), cell_rect)
+                pygame.draw.rect(surface, (100, 100, 150), cell_rect, 1)
+            else:  # Path
+                pygame.draw.rect(surface, (30, 30, 50), cell_rect)
+                pygame.draw.rect(surface, (60, 60, 90), cell_rect, 1)
+    
+    # Draw exit
+    exit_x = maze_x + maze_exit_pos[0] * maze_cell_size
+    exit_y = maze_y + maze_exit_pos[1] * maze_cell_size
+    exit_rect = pygame.Rect(exit_x, exit_y, maze_cell_size, maze_cell_size)
+    pygame.draw.rect(surface, (0, 200, 0), exit_rect)
+    pygame.draw.rect(surface, (0, 255, 0), exit_rect, 2)
+    
+    # Draw player
+    player_x = maze_x + maze_player_pos[0] * maze_cell_size
+    player_y = maze_y + maze_player_pos[1] * maze_cell_size
+    player_rect = pygame.Rect(player_x + 5, player_y + 5, maze_cell_size - 10, maze_cell_size - 10)
+    pygame.draw.rect(surface, (255, 100, 100), player_rect)
+    
+    # Draw close button
+    close_rect = pygame.Rect(maze_x + maze_total_width - 90, maze_y + maze_total_height + 10, 80, 25)
+    pygame.draw.rect(surface, (180, 80, 80), close_rect)
+    pygame.draw.rect(surface, (220, 150, 150), close_rect, 2)
+    close_text = small_font.render("CLOSE", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, 
+                            close_rect.centery - close_text.get_height()//2))
+    
+    return close_rect
+
+def handle_maze_input():
+    """Handle arrow key input for maze navigation."""
+    global maze_player_pos, maze_completed
+    
+    keys = pygame.key.get_pressed()
+    new_pos = maze_player_pos.copy()
+    
+    if keys[pygame.K_UP]:
+        new_pos[1] -= 1
+    elif keys[pygame.K_DOWN]:
+        new_pos[1] += 1
+    elif keys[pygame.K_LEFT]:
+        new_pos[0] -= 1
+    elif keys[pygame.K_RIGHT]:
+        new_pos[0] += 1
+    else:
+        return False
+    
+    # Check if move is valid (within bounds and not a wall)
+    if (0 <= new_pos[0] < maze_width and 0 <= new_pos[1] < maze_height and 
+        maze_layout[new_pos[1]][new_pos[0]] == 0):
+        maze_player_pos = new_pos
+        
+        # Check if reached exit
+        if maze_player_pos == maze_exit_pos:
+            maze_completed = True
+            maze_visible = False
+            # Knight is rescued
+            room_key = tuple(current_room)
+            room_info = room_data.get(room_key, {})
+            for npc in room_info.get("npcs", []):
+                if npc.get("id") == "knight":
+                    npc["rescued"] = True
+                    quests["rescue_knight"]["complete"] = True
+                    quests["defeat_goblin_king"]["active"] = True
+                    # Drop a key
+                    room_info["items"].append({"type": "key", "x": 430, "y": 600, "id": "key_0_1_0_2"})
+                    set_message("Knight rescued! He dropped a key!", (0, 255, 0), 3.0)
+                    break
+        return True
+    return False
+
 # ===== NEW UI FUNCTIONS =====
 def create_button(text, x, y, width, height, hover=False):
     """Create a button with hover effect."""
@@ -1481,7 +1627,7 @@ def update_goblins(dt):
     state = goblin_rooms.get(room_key)
     if not state:
         return
-    if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
+    if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or maze_visible:
         return
     global goblin_contact_cooldown, health
 
@@ -1580,7 +1726,7 @@ def set_message(text, color, duration):
 def handle_interaction():
     """Handle F key interactions."""
     global dialogue_active, current_dialogue, dialogue_index, upgrade_shop_visible
-    global safe_visible, safe_input, safe_unlocked
+    global safe_visible, safe_input, safe_unlocked, maze_visible
     
     room_key = tuple(current_room)
     
@@ -1621,10 +1767,22 @@ def handle_interaction():
             obj_type = inter_obj["type"]
             
             if obj_type == "cage" and room_key == (0, 1, 0):
-                if not quests["rescue_knight"]["complete"]:
-                    quests["rescue_knight"]["complete"] = True
-                    quests["defeat_goblin_king"]["active"] = True
-                    set_message("Knight Rescued!", (0, 255, 0), 2.0)
+                # Check if knight is already rescued
+                room_info = room_data.get(room_key, {})
+                knight_rescued = False
+                for npc in room_info.get("npcs", []):
+                    if npc.get("id") == "knight":
+                        knight_rescued = npc.get("rescued", False)
+                        break
+                
+                if not knight_rescued:
+                    # Start maze puzzle to rescue knight
+                    maze_visible = True
+                    maze_player_pos = [1, 1]  # Reset player position
+                    maze_completed = False
+                    set_message("Solve the maze to rescue the knight!", (0, 255, 0), 2.0)
+                else:
+                    set_message("The knight has already been rescued!", (200, 200, 200), 1.5)
             
             elif obj_type == "lever" and room_key == (0, 1, 1):
                 if not quests["solve_drawbridge"]["complete"]:
@@ -1722,6 +1880,8 @@ while running:
                 back_button_hover = back_button.collidepoint(mouse_pos)
             elif game_state == "playing" and safe_visible:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
+            elif game_state == "playing" and maze_visible:
+                close_rect = draw_maze_puzzle(screen)
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if game_state == "main_menu":
@@ -1753,10 +1913,21 @@ while running:
                 # Check close button
                 if close_rect.collidepoint(mouse_pos):
                     safe_visible = False
+            
+            elif game_state == "playing" and maze_visible:
+                close_rect = draw_maze_puzzle(screen)
+                
+                # Check close button
+                if close_rect.collidepoint(mouse_pos):
+                    maze_visible = False
         
         elif event.type == pygame.KEYDOWN:
             if game_state == "playing":
-                if safe_visible:
+                if maze_visible:
+                    # Handle maze navigation with arrow keys
+                    handle_maze_input()
+                
+                elif safe_visible:
                     # Handle number input for safe
                     if event.unicode.isdigit() and len(safe_input) < 4:
                         handle_safe_input(event.unicode)
@@ -1820,7 +1991,7 @@ while running:
                     give_herbs_to_collector()
                 
                 # Shooting with SPACE key
-                elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active and not safe_visible:
+                elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active and not safe_visible and not maze_visible:
                     if shoot_bullet():
                         set_message("Pew!", (255, 255, 0), 0.5)
                     elif not has_weapon:
@@ -1837,7 +2008,7 @@ while running:
                     set_message("Reloading...", (255, 200, 0), 1.0)
                 
                 # ESC to return to main menu
-                elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible and not safe_visible:
+                elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible and not safe_visible and not maze_visible:
                     game_state = "main_menu"
             
             # Allow ESC to go back from how to play or about screens
@@ -1877,7 +2048,7 @@ while running:
             player_direction = "left"
         
         # Freeze movement when UI overlays or dialogue are active
-        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible:
+        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible or maze_visible:
             mv_x, mv_y = 0, 0
         
         dx, dy = mv_x * player_speed, mv_y * player_speed
@@ -1939,6 +2110,10 @@ while running:
         if safe_visible:
             buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
         
+        # Draw maze puzzle if active
+        if maze_visible:
+            close_rect = draw_maze_puzzle(screen)
+        
         # Show interaction hint
         near_object = False
         for inter_obj in interactive_objects:
@@ -1950,7 +2125,7 @@ while running:
                 near_object = True
                 break
         
-        if near_object and not dialogue_active and not upgrade_shop_visible and not safe_visible:
+        if near_object and not dialogue_active and not upgrade_shop_visible and not safe_visible and not maze_visible:
             hint = small_font.render("Press F to Interact", True, (255, 255, 255))
             screen.blit(hint, (player.centerx - 40, player.top - 25))
             
