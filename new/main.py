@@ -170,7 +170,7 @@ def load_smart_bg(level, row, col):
     background_mapping = {
         (0, 0, 0): "village",
         (0, 0, 1): "blacksmith", 
-        (0, 0, 2): "forest",
+        (0, 0, 2): "forestPath",
         (0, 1, 0): "goblincamp",
         (0, 1, 1): "castlebridge",
         (0, 1, 2): "courtyard",
