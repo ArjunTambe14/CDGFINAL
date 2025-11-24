@@ -19,6 +19,7 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 30)
 title_font = pygame.font.SysFont(None, 70)
 small_font = pygame.font.SysFont(None, 24)
+button_font = pygame.font.SysFont(None, 40)
 POINTER_COLOR = (255, 215, 0)
 POINTER_SIZE = 12
 POINTER_OFFSET_X = -20
@@ -219,6 +220,7 @@ collected_herbs = set()
 collected_potions = set()
 
 # ===== UI FLAGS =====
+game_state = "main_menu"  # "main_menu", "how_to_play", "about", "playing"
 on_home = True
 hud_visible = False
 map_visible = False
@@ -807,6 +809,144 @@ def draw_upgrade_shop(surface):
         hint_text = small_font.render(hint, True, (200, 200, 200))
         surface.blit(hint_text, (150, y + i * 20))
 
+# ===== NEW UI FUNCTIONS =====
+def create_button(text, x, y, width, height, hover=False):
+    """Create a button with hover effect."""
+    button_color = (80, 80, 120) if not hover else (100, 100, 150)
+    border_color = (150, 150, 200) if not hover else (180, 180, 220)
+    
+    button_rect = pygame.Rect(x, y, width, height)
+    pygame.draw.rect(screen, button_color, button_rect)
+    pygame.draw.rect(screen, border_color, button_rect, 3)
+    
+    text_surf = button_font.render(text, True, (255, 255, 255))
+    text_rect = text_surf.get_rect(center=button_rect.center)
+    screen.blit(text_surf, text_rect)
+    
+    return button_rect
+
+def draw_main_menu():
+    """Draw the main menu with options."""
+    screen.fill((20, 20, 40))
+    
+    # Title
+    title = title_font.render("CHRONICLES OF TIME", True, (255, 215, 0))
+    subtitle = font.render("An Epic Time-Travel Adventure", True, (200, 200, 255))
+    screen.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 150))
+    screen.blit(subtitle, (ROOM_WIDTH//2 - subtitle.get_width()//2, 220))
+    
+    # Buttons
+    button_width, button_height = 300, 60
+    button_x = ROOM_WIDTH//2 - button_width//2
+    
+    play_button = create_button("PLAY", button_x, 300, button_width, button_height, play_button_hover)
+    how_to_button = create_button("HOW TO PLAY", button_x, 380, button_width, button_height, how_to_button_hover)
+    about_button = create_button("ABOUT", button_x, 460, button_width, button_height, about_button_hover)
+    
+    # Footer
+    footer = small_font.render("Made by Arjun Tambe, Shuban Nannisetty and Charanjit Kukkadapu.", True, (150, 150, 150))
+    screen.blit(footer, (ROOM_WIDTH//2 - footer.get_width()//2, ROOM_HEIGHT - 40))
+    
+    return play_button, how_to_button, about_button
+
+def draw_how_to_play():
+    """Draw the how to play screen."""
+    screen.fill((20, 20, 40))
+    
+    # Title
+    title = title_font.render("HOW TO PLAY", True, (255, 215, 0))
+    screen.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 80))
+    
+    # Content box
+    content_box = pygame.Rect(50, 150, ROOM_WIDTH - 100, ROOM_HEIGHT - 250)
+    pygame.draw.rect(screen, (30, 30, 50), content_box)
+    pygame.draw.rect(screen, (255, 215, 0), content_box, 3)
+    
+    # Instructions
+    instructions = [
+        "CONTROLS:",
+        "• WASD or Arrow Keys - Move character",
+        "• SPACE - Shoot weapon",
+        "• R - Reload weapon", 
+        "• F - Interact with objects/NPCs",
+        "• E - Toggle Inventory",
+        "• M - Toggle Minimap",
+        "• Q - Toggle Quest Log",
+        "• H - Use Health Potion",
+        "",
+        "GAMEPLAY:",
+        "• Explore different rooms and eras",
+        "• Collect gold, herbs, and potions",
+        "• Complete quests from NPCs",
+        "• Upgrade your weapon and armor",
+        "• Solve puzzles and defeat bosses to progress",
+        "• Find Time Shards to travel through time"
+    ]
+    
+    y = content_box.y + 20
+    for line in instructions:
+        if "CONTROLS:" in line or "GAMEPLAY:" in line:
+            text = font.render(line, True, (255, 180, 0))
+        else:
+            text = small_font.render(line, True, (220, 220, 220))
+        screen.blit(text, (content_box.x + 20, y))
+        y += 30
+    
+    # Back button
+    back_button = create_button("BACK", ROOM_WIDTH//2 - 100, ROOM_HEIGHT - 80, 200, 50, back_button_hover)
+    return back_button
+
+def draw_about():
+    """Draw the about screen."""
+    screen.fill((20, 20, 40))
+    
+    # Title
+    title = title_font.render("ABOUT", True, (255, 215, 0))
+    screen.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 80))
+    
+    # Content box
+    content_box = pygame.Rect(50, 150, ROOM_WIDTH - 100, ROOM_HEIGHT - 250)
+    pygame.draw.rect(screen, (30, 30, 50), content_box)
+    pygame.draw.rect(screen, (255, 215, 0), content_box, 3)
+    
+    # About text
+    about_text = [
+        "CHRONICLES OF TIME",
+        "",
+        "Embark on an epic time-travel adventure across different eras!",
+        "",
+        "STORY:",
+        "You are Arin, a brave adventurer tasked with recovering the",
+        "lost Time Shards that have been scattered throughout history.",
+        "Your journey will take you from peaceful villages to ancient",
+        "castles and mysterious libraries.",
+        "",
+        "FEATURES:",
+        "• Explore 9 unique rooms across different time periods",
+        "• Engage in combat with various enemies",
+        "• Solve challenging puzzles and riddles",
+        "• Upgrade your equipment and abilities",
+        "• Complete quests and uncover the story",
+        "• Collect valuable items and resources",
+        "",
+        "Can you restore the timeline and save the world?"
+    ]
+    
+    y = content_box.y + 20
+    for line in about_text:
+        if "CHRONICLES OF TIME" in line:
+            text = font.render(line, True, (255, 180, 0))
+        elif "STORY:" in line or "FEATURES:" in line:
+            text = small_font.render(line, True, (200, 200, 255))
+        else:
+            text = small_font.render(line, True, (220, 220, 220))
+        screen.blit(text, (content_box.x + 20, y))
+        y += 25
+    
+    # Back button
+    back_button = create_button("BACK", ROOM_WIDTH//2 - 100, ROOM_HEIGHT - 80, 200, 50, back_button_hover)
+    return back_button
+
 # ===== GAME LOGIC FUNCTIONS =====
 def collision_check(dx, dy):
     """Handle collision with objects."""
@@ -961,190 +1101,214 @@ def handle_interaction():
 
 # ===== MAIN GAME LOOP =====
 running = True
+play_button_hover = False
+how_to_button_hover = False
+about_button_hover = False
+back_button_hover = False
+
 while running:
     dt = clock.tick(60)
     keys_pressed = pygame.key.get_pressed()
+    mouse_pos = pygame.mouse.get_pos()
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         
+        elif event.type == pygame.MOUSEMOTION:
+            # Update button hover states based on current screen
+            if game_state == "main_menu":
+                play_button, how_to_button, about_button = draw_main_menu()
+                play_button_hover = play_button.collidepoint(mouse_pos)
+                how_to_button_hover = how_to_button.collidepoint(mouse_pos)
+                about_button_hover = about_button.collidepoint(mouse_pos)
+            elif game_state in ["how_to_play", "about"]:
+                back_button = draw_how_to_play() if game_state == "how_to_play" else draw_about()
+                back_button_hover = back_button.collidepoint(mouse_pos)
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if game_state == "main_menu":
+                play_button, how_to_button, about_button = draw_main_menu()
+                if play_button.collidepoint(mouse_pos):
+                    game_state = "playing"
+                elif how_to_button.collidepoint(mouse_pos):
+                    game_state = "how_to_play"
+                elif about_button.collidepoint(mouse_pos):
+                    game_state = "about"
+            
+            elif game_state in ["how_to_play", "about"]:
+                back_button = draw_how_to_play() if game_state == "how_to_play" else draw_about()
+                if back_button.collidepoint(mouse_pos):
+                    game_state = "main_menu"
+        
         elif event.type == pygame.KEYDOWN:
-            if on_home and event.key == pygame.K_SPACE:
-                on_home = False
-            
-            elif dialogue_active and event.key == pygame.K_SPACE:
-                dialogue_index += 1
-                if dialogue_index >= len(current_dialogue):
-                    dialogue_active = False
-            
-            elif upgrade_shop_visible:
-                if event.key == pygame.K_1 and weapon_level < 5:
-                    next_level = weapon_level + 1
-                    cost = upgrade_costs["weapon"].get(next_level - 1, 100)
-                    if inventory["Gold"] >= cost:
-                        inventory["Gold"] -= cost
-                        weapon_level = next_level
-                        message, message_color, message_timer = f"Weapon upgraded to level {weapon_level}!", (0, 255, 0), 2.0
-                        if weapon_level > 1 and not quests["upgrade_sword"]["complete"]:
-                            quests["upgrade_sword"]["complete"] = True
-                            quests["collect_herbs"]["active"] = True
-                    else:
-                        message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+            if game_state == "playing":
+                if dialogue_active and event.key == pygame.K_SPACE:
+                    dialogue_index += 1
+                    if dialogue_index >= len(current_dialogue):
+                        dialogue_active = False
                 
-                elif event.key == pygame.K_2 and armor_level < 5:
-                    next_level = armor_level + 1
-                    cost = upgrade_costs["armor"].get(next_level - 1, 95)
-                    if inventory["Gold"] >= cost:
-                        inventory["Gold"] -= cost
-                        armor_level = next_level
-                        max_health = 100 + (armor_level * 20)  # +20 health per armor level
-                        health = min(health, max_health)  # Cap current health to new max
-                        message, message_color, message_timer = f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0
-                    else:
-                        message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                elif upgrade_shop_visible:
+                    if event.key == pygame.K_1 and weapon_level < 5:
+                        next_level = weapon_level + 1
+                        cost = upgrade_costs["weapon"].get(next_level - 1, 100)
+                        if inventory["Gold"] >= cost:
+                            inventory["Gold"] -= cost
+                            weapon_level = next_level
+                            message, message_color, message_timer = f"Weapon upgraded to level {weapon_level}!", (0, 255, 0), 2.0
+                            if weapon_level > 1 and not quests["upgrade_sword"]["complete"]:
+                                quests["upgrade_sword"]["complete"] = True
+                                quests["collect_herbs"]["active"] = True
+                        else:
+                            message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                    
+                    elif event.key == pygame.K_2 and armor_level < 5:
+                        next_level = armor_level + 1
+                        cost = upgrade_costs["armor"].get(next_level - 1, 95)
+                        if inventory["Gold"] >= cost:
+                            inventory["Gold"] -= cost
+                            armor_level = next_level
+                            max_health = 100 + (armor_level * 20)  # +20 health per armor level
+                            health = min(health, max_health)  # Cap current health to new max
+                            message, message_color, message_timer = f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0
+                        else:
+                            message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                    
+                    elif event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
+                        upgrade_shop_visible = False
                 
-                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
-                    upgrade_shop_visible = False
+                elif event.key == pygame.K_e:
+                    hud_visible = not hud_visible
+                
+                elif event.key == pygame.K_m:
+                    map_visible = not map_visible
+                
+                elif event.key == pygame.K_q:
+                    quest_log_visible = not quest_log_visible
+                
+                elif event.key == pygame.K_h and inventory["Health Potions"] > 0 and health < max_health:
+                    inventory["Health Potions"] -= 1
+                    health = min(max_health, health + 30)
+                    message, message_color, message_timer = "+30 Health", (0, 255, 0), 1.5
+                
+                elif event.key == pygame.K_f:
+                    handle_interaction()
+                
+                # Shooting with SPACE key
+                elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active:
+                    if shoot_bullet():
+                        message, message_color, message_timer = "Pew!", (255, 255, 0), 0.5
+                    elif not has_weapon:
+                        message, message_color, message_timer = "No weapon equipped!", (255, 0, 0), 1.0
+                    elif is_reloading:
+                        message, message_color, message_timer = "Reloading...", (255, 200, 0), 0.5
+                    elif ammo == 0:
+                        message, message_color, message_timer = "Out of ammo! Press R to reload", (255, 0, 0), 1.0
+                
+                # Reload with R key
+                elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
+                    is_reloading = True
+                    reload_time = 2.0
+                    message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
+                
+                # ESC to return to main menu
+                elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible:
+                    game_state = "main_menu"
             
-            elif event.key == pygame.K_e:
-                hud_visible = not hud_visible
-            
-            elif event.key == pygame.K_m:
-                map_visible = not map_visible
-            
-            elif event.key == pygame.K_q:
-                quest_log_visible = not quest_log_visible
-            
-            elif event.key == pygame.K_h and inventory["Health Potions"] > 0 and health < max_health:
-                inventory["Health Potions"] -= 1
-                health = min(max_health, health + 30)
-                message, message_color, message_timer = "+30 Health", (0, 255, 0), 1.5
-            
-            elif event.key == pygame.K_f:
-                handle_interaction()
-            
-            # Shooting with SPACE key
-            elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active:
-                if shoot_bullet():
-                    message, message_color, message_timer = "Pew!", (255, 255, 0), 0.5
-                elif not has_weapon:
-                    message, message_color, message_timer = "No weapon equipped!", (255, 0, 0), 1.0
-                elif is_reloading:
-                    message, message_color, message_timer = "Reloading...", (255, 200, 0), 0.5
-                elif ammo == 0:
-                    message, message_color, message_timer = "Out of ammo! Press R to reload", (255, 0, 0), 1.0
-            
-            # Reload with R key
-            elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
-                is_reloading = True
-                reload_time = 2.0
-                message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
-        # Get mouse position for aiming
+            # Allow ESC to go back from how to play or about screens
+            elif event.key == pygame.K_ESCAPE and game_state in ["how_to_play", "about"]:
+                game_state = "main_menu"
+    
+    # Get mouse position for aiming (in gameplay)
     mouse_x, mouse_y = pygame.mouse.get_pos()
-    # ===== HOME SCREEN =====
-    if on_home:
-        screen.fill((30, 30, 60))
-        title = title_font.render("CHRONICLES OF TIME", True, (255, 215, 0))
-        screen.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 200))
-        prompt = font.render("Press SPACE to Begin", True, (255, 255, 255))
-        screen.blit(prompt, (ROOM_WIDTH//2 - prompt.get_width()//2, 400))
+    
+    # ===== SCREEN RENDERING =====
+    if game_state == "main_menu":
+        play_button, how_to_button, about_button = draw_main_menu()
+    
+    elif game_state == "how_to_play":
+        back_button = draw_how_to_play()
+    
+    elif game_state == "about":
+        back_button = draw_about()
+    
+    elif game_state == "playing":
+        # ===== GAMEPLAY =====
         
-        # Show controls
-        controls = [
-            "WASD - Move",
-            "SPACE - Shoot", 
-            "R - Reload",
-            "F - Interact",
-            "E - Inventory",
-            "H - Use Health Potion"
-        ]
-        y = 500
-        for ctrl in controls:
-            ctrl_text = small_font.render(ctrl, True, (200, 200, 200))
-            screen.blit(ctrl_text, (ROOM_WIDTH//2 - ctrl_text.get_width()//2, y))
-            y += 25
-            
-        pygame.display.flip()
-        continue
-    
-    # ===== GAMEPLAY =====
-    
-    # Movement
-    mv_x = (keys_pressed[pygame.K_d] or keys_pressed[pygame.K_RIGHT]) - (keys_pressed[pygame.K_a] or keys_pressed[pygame.K_LEFT])
-    mv_y = (keys_pressed[pygame.K_s] or keys_pressed[pygame.K_DOWN]) - (keys_pressed[pygame.K_w] or keys_pressed[pygame.K_UP])
-    
-    # Update player direction based on horizontal movement only
+        # Movement
+        mv_x = (keys_pressed[pygame.K_d] or keys_pressed[pygame.K_RIGHT]) - (keys_pressed[pygame.K_a] or keys_pressed[pygame.K_LEFT])
+        mv_y = (keys_pressed[pygame.K_s] or keys_pressed[pygame.K_DOWN]) - (keys_pressed[pygame.K_w] or keys_pressed[pygame.K_UP])
+        
         # Update player direction based on mouse position
-    if mouse_x > player.centerx + 10:  # Add small dead zone
-        player_direction = "right"
-    elif mouse_x < player.centerx - 10:
-        player_direction = "left"
-    # Keep current direction if mouse is near center
-    # If only vertical movement or no movement, keep current direction
-    
-    if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
-        mv_x, mv_y = 0, 0
-    
-    dx, dy = mv_x * player_speed, mv_y * player_speed
-    
-    # Draw room
-    draw_room(screen, *current_room)
-    
-    # Movement & collision
-    collision_check(dx, dy)
-    room_transition()
-    
-    # Update weapon systems
-    if shoot_cooldown > 0:
-        shoot_cooldown = max(0, shoot_cooldown - dt / 1000.0)
-    
-    if is_reloading:
-        reload_time -= dt / 1000.0
-        if reload_time <= 0:
-            ammo = max_ammo
-            is_reloading = False
-            reload_time = 0.0
-    
-    update_bullets(dt)
-    
-    # Pickup items
-    pickup_items()
-    
-    # Draw player
-    draw_player(screen, player)
-    draw_player_pointer(screen, player)
-    
-    # Draw bullets
-    draw_bullets(screen)
+        if mouse_x > player.centerx + 10:  # Add small dead zone
+            player_direction = "right"
+        elif mouse_x < player.centerx - 10:
+            player_direction = "left"
+        # Keep current direction if mouse is near center
+        # If only vertical movement or no movement, keep current direction
         
-    # Draw UI
-    draw_hud(screen) 
-    draw_minimap(screen, *current_room)
-    draw_quest_log(screen)
-    draw_message(screen)
-    draw_dialogue(screen)
-    draw_upgrade_shop(screen)
-    draw_weapon_hud(screen)
-    
-    # Show interaction hint
-    near_object = False
-    for inter_obj in interactive_objects:
-        if player.colliderect(inter_obj["rect"].inflate(50, 50)):
-            near_object = True
-            break
-    for npc_rect in npcs:
-        if player.colliderect(npc_rect.inflate(50, 50)):
-            near_object = True
-            break
-    
-    if near_object and not dialogue_active and not upgrade_shop_visible:
-        hint = small_font.render("Press F to Interact", True, (255, 255, 255))
-        screen.blit(hint, (player.centerx - 40, player.top - 25))
-    
-    # Timers
-    if message_timer > 0:
-        message_timer = max(0, message_timer - dt / 1000.0)
+        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
+            mv_x, mv_y = 0, 0
+        
+        dx, dy = mv_x * player_speed, mv_y * player_speed
+        
+        # Draw room
+        draw_room(screen, *current_room)
+        
+        # Movement & collision
+        collision_check(dx, dy)
+        room_transition()
+        
+        # Update weapon systems
+        if shoot_cooldown > 0:
+            shoot_cooldown = max(0, shoot_cooldown - dt / 1000.0)
+        
+        if is_reloading:
+            reload_time -= dt / 1000.0
+            if reload_time <= 0:
+                ammo = max_ammo
+                is_reloading = False
+                reload_time = 0.0
+        
+        update_bullets(dt)
+        
+        # Pickup items
+        pickup_items()
+        
+        # Draw player
+        draw_player(screen, player)
+        draw_player_pointer(screen, player)
+        
+        # Draw bullets
+        draw_bullets(screen)
+            
+        # Draw UI
+        draw_hud(screen) 
+        draw_minimap(screen, *current_room)
+        draw_quest_log(screen)
+        draw_message(screen)
+        draw_dialogue(screen)
+        draw_upgrade_shop(screen)
+        draw_weapon_hud(screen)
+        
+        # Show interaction hint
+        near_object = False
+        for inter_obj in interactive_objects:
+            if player.colliderect(inter_obj["rect"].inflate(50, 50)):
+                near_object = True
+                break
+        for npc_rect in npcs:
+            if player.colliderect(npc_rect.inflate(50, 50)):
+                near_object = True
+                break
+        
+        if near_object and not dialogue_active and not upgrade_shop_visible:
+            hint = small_font.render("Press F to Interact", True, (255, 255, 255))
+            screen.blit(hint, (player.centerx - 40, player.top - 25))
+        
+        # Timers
+        if message_timer > 0:
+            message_timer = max(0, message_timer - dt / 1000.0)
     
     pygame.display.flip()
 
