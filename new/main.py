@@ -25,13 +25,20 @@ player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
 player_speed = 7
 current_room = [0, 0, 0]
 previous_room = tuple(current_room)
+player_direction = "right"  # Start facing right
+
+# ===== UPGRADE SYSTEM =====
+upgrade_costs = {
+    "weapon": {1: 30, 2: 50, 3: 75, 4: 100},
+    "armor": {1: 25, 2: 45, 3: 70, 4: 95}
+}
 
 # ===== IMPROVED IMAGE SYSTEM =====
 ASSETS_DIR = "assets"
 image_cache = {}
 
 def load_image(name, width=None, height=None):
-    """Improved image loader with transparency support."""
+    """Improved image loader with text labels on fallback squares."""
     cache_key = f"{name}_{width}x{height}" if width and height else name
     
     if cache_key in image_cache:
@@ -40,7 +47,12 @@ def load_image(name, width=None, height=None):
     try:
         filepath = os.path.join(ASSETS_DIR, name)
         if os.path.exists(filepath):
-            img = pygame.image.load(filepath).convert_alpha()
+            # Try different loading methods
+            try:
+                img = pygame.image.load(filepath).convert_alpha()
+            except:
+                img = pygame.image.load(filepath).convert()
+            
             if width and height:
                 img = pygame.transform.scale(img, (width, height))
             image_cache[cache_key] = img
@@ -48,12 +60,32 @@ def load_image(name, width=None, height=None):
     except Exception as e:
         print(f"Error loading {filepath}: {e}")
     
-    # Better fallback: semi-transparent surface
+    # Better fallback: semi-transparent surface with text label
     fallback = pygame.Surface((width or 50, height or 50), pygame.SRCALPHA)
     fallback.fill((255, 0, 255, 128))  # Semi-transparent magenta
+    
+    # Extract image name for label (remove folder path and extension)
+    image_name = name.split('/')[-1].split('.')[0]
+    
+    # Create text label
+    try:
+        # Use smaller font for better fit
+        label_font = pygame.font.SysFont(None, max(12, min(20, width // 5 if width else 12)))
+        text = label_font.render(image_name, True, (255, 255, 255))
+        text_rect = text.get_rect(center=(fallback.get_width()//2, fallback.get_height()//2))
+        
+        # Add background for text readability
+        bg_rect = text_rect.inflate(10, 5)
+        pygame.draw.rect(fallback, (0, 0, 0, 180), bg_rect)
+        pygame.draw.rect(fallback, (255, 255, 255), bg_rect, 1)
+        
+        # Draw text
+        fallback.blit(text, text_rect)
+    except:
+        pass  # If text rendering fails, just show the colored square
+    
     image_cache[cache_key] = fallback
     return fallback
-
 def load_smart_bg(level, row, col):
     """Load background using smart mapping."""
     if level != 0:
@@ -78,8 +110,9 @@ def load_smart_bg(level, row, col):
     
     return None
 
-def load_player_image():
-    return load_image("characters/player.png", 40, 50)
+def load_player_image(direction="right"):
+    """Load player sprite based on direction (only left/right supported)."""
+    return load_image(f"characters/player_{direction}.png", 40, 50)
 
 def load_object_image(obj_type, width, height):
     return load_image(f"objects/{obj_type}.png", width, height)
@@ -170,9 +203,9 @@ room_data = {
     (0, 0, 0): {
         "name": "Village Square",
         "objects": [
-            {"type": "building", "x": 200, "y": 150, "width": 150, "height": 120},
-            {"type": "building", "x": 550, "y": 200, "width": 150, "height": 120},
-            {"type": "tree", "x": 100, "y": 500, "width": 60, "height": 100},
+            {"type": "building", "x": 0, "y": 0, "width": 250, "height": 220},
+            {"type": "building", "x": 550, "y": 200, "width": 250, "height": 220},
+            {"type": "tree", "x": 100, "y": 500, "width": 100, "height": 100},
             {"type": "tree", "x": 650, "y": 550, "width": 60, "height": 100},
         ],
         "interactive": [],
@@ -181,7 +214,7 @@ room_data = {
         ],
         "items": [
             {"type": "gold", "x": 150, "y": 300, "id": "gold_0_0_0_1"},
-            {"type": "gold", "x": 650, "y": 350, "id": "gold_0_0_0_2"},
+            {"type": "gold", "x": 450, "y": 150, "id": "gold_0_0_0_2"},
         ]
     },
     
@@ -189,7 +222,7 @@ room_data = {
         "name": "Blacksmith's Forge",
         "objects": [
             {"type": "building", "x": 250, "y": 200, "width": 150, "height": 120},
-            {"type": "rock", "x": 150, "y": 500, "width": 50, "height": 50},
+            {"type": "rock", "x": 150, "y": 500, "width": 100, "height": 100},
             {"type": "rock", "x": 600, "y": 600, "width": 50, "height": 50},
         ],
         "interactive": [
@@ -334,8 +367,8 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     return rect
 
 def draw_player(surface, player_rect):
-    """Draw player using image."""
-    img = load_player_image()
+    """Draw player using directional sprite."""
+    img = load_player_image(player_direction)  # Use the global player_direction
     surface.blit(img, (player_rect.x, player_rect.y))
 
 def draw_npc(surface, x, y, npc_id):
@@ -476,6 +509,7 @@ def draw_minimap(surface, level, row, col):
     room_name = room_data.get((level, row, col), {}).get("name", "Unknown")
     name_text = small_font.render(room_name, True, (255, 255, 255))
     surface.blit(name_text, (map_x, map_y + map_size + 10))
+
 def draw_quest_log(surface):
     """Draw quest log."""
     if not quest_log_visible:
@@ -788,9 +822,16 @@ while running:
     
     # ===== GAMEPLAY =====
     
-    # Movement
+        # Movement
     mv_x = (keys_pressed[pygame.K_d] or keys_pressed[pygame.K_RIGHT]) - (keys_pressed[pygame.K_a] or keys_pressed[pygame.K_LEFT])
     mv_y = (keys_pressed[pygame.K_s] or keys_pressed[pygame.K_DOWN]) - (keys_pressed[pygame.K_w] or keys_pressed[pygame.K_UP])
+    
+    # Update player direction based on horizontal movement only
+    if mv_x > 0:  # Moving right
+        player_direction = "right"
+    elif mv_x < 0:  # Moving left
+        player_direction = "left"
+    # If only vertical movement or no movement, keep current direction
     
     if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
         mv_x, mv_y = 0, 0
@@ -809,9 +850,9 @@ while running:
     
     # Draw player
     draw_player(screen, player)
-    
+        
     # Draw UI
-    draw_hud(screen)
+    draw_hud(screen) 
     draw_minimap(screen, *current_room)
     draw_quest_log(screen)
     draw_message(screen)
