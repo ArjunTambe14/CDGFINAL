@@ -212,7 +212,7 @@ def get_npc_size(npc_type):
     elif npc_type == "boss1":
         return (100, 120)  # Larger boss
     elif npc_type == "herbcollector":
-        return (50, 70)  # Larger herb collector
+        return (70, 90)  # Larger herb collector (increased from 50,70)
     elif npc_type == "knight":
         return (50, 70)  # Knight size
     return (35, 55)
@@ -555,7 +555,7 @@ def init_boss():
         "alive": True,
         "last_direction": "right"
     }
-    boss_max_health = max_health * 3  # Triple player's health
+    boss_max_health = max_health * 4  # QUADRUPLE player's health (changed from triple)
     boss_health = boss_max_health
     boss_attack_cooldown = 0
     boss_axe = {"x": 0, "y": 0, "angle": 0, "swinging": False}
@@ -1050,30 +1050,35 @@ def draw_room(surface, level, row, col):
     for item in room_info.get("items", []):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
-def draw_hud(surface):
-    """Draw HUD with health and inventory."""
-    if not hud_visible:
-        return
-    
-    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 200))
-    surface.blit(overlay, (0, 0))
-    
-    # Health bar at bottom middle
+def draw_health_bar(surface):
+    """Draw permanent health bar at bottom middle of screen."""
     health_width = 400
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = ROOM_HEIGHT - 50
     
+    # Background
     pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 30))
+    # Health fill
     pygame.draw.rect(surface, (0, 255, 0), (health_x, health_y, health_width * (health / max_health), 30))
+    # Border
     pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 30), 2)
     
+    # Health text
     health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
     surface.blit(health_text, (health_x + 10, health_y + 5))
     
     # Armor level
     armor_text = small_font.render(f"Armor Level: {armor_level}", True, (200, 255, 200))
     surface.blit(armor_text, (health_x + health_width - 150, health_y + 5))
+
+def draw_hud(surface):
+    """Draw HUD with inventory (health bar is now drawn separately)."""
+    if not hud_visible:
+        return
+    
+    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    surface.blit(overlay, (0, 0))
     
     # Inventory
     y = 100
@@ -1287,7 +1292,7 @@ def draw_safe_puzzle(surface):
         hint_text = small_font.render("Enter the 4-digit code", True, (200, 200, 200))
         surface.blit(hint_text, (ROOM_WIDTH//2 - hint_text.get_width()//2, 320))
     
-    # Number buttons
+    # Number buttons - repositioned to avoid overlap
     button_size = 50
     buttons = []
     for i in range(3):
@@ -1304,16 +1309,16 @@ def draw_safe_puzzle(surface):
                                   y + button_size//2 - num_text.get_height()//2))
             buttons.append((button_rect, str(num)))
     
-    # Clear button
-    clear_rect = pygame.Rect(box.x + 50, box.y + 150, 80, 40)
+    # Clear button - moved to avoid overlapping with number 1
+    clear_rect = pygame.Rect(box.x + 50, box.y + 270, 80, 40)  # Moved down
     pygame.draw.rect(surface, (180, 80, 80), clear_rect)
     pygame.draw.rect(surface, (220, 150, 150), clear_rect, 2)
     clear_text = small_font.render("CLEAR", True, (255, 255, 255))
     surface.blit(clear_text, (clear_rect.centerx - clear_text.get_width()//2, 
                             clear_rect.centery - clear_text.get_height()//2))
     
-    # Close button
-    close_rect = pygame.Rect(box.x + 270, box.y + 150, 80, 40)
+    # Close button - moved to avoid overlapping
+    close_rect = pygame.Rect(box.x + 270, box.y + 270, 80, 40)  # Moved down
     pygame.draw.rect(surface, (80, 80, 180), close_rect)
     pygame.draw.rect(surface, (150, 150, 220), close_rect, 2)
     close_text = small_font.render("CLOSE", True, (255, 255, 255))
@@ -2096,6 +2101,9 @@ while running:
         
         # Draw bullets
         draw_bullets(screen)
+        
+        # Draw permanent health bar (always visible)
+        draw_health_bar(screen)
             
         # Draw UI
         draw_hud(screen) 
