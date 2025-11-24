@@ -359,42 +359,39 @@ room_data = {
 
 # ===== WEAPON FUNCTIONS =====
 def shoot_bullet():
-    """Shoot a bullet in the direction the player is facing."""
+    """Shoot a bullet towards the mouse position."""
     global ammo, shoot_cooldown, is_reloading
     
     if not has_weapon:
         return False
         
     if not is_reloading and ammo > 0 and shoot_cooldown <= 0:
-        bullet_speed = 15.0
-        damage = 20 + (weapon_level * 5)
+        # Calculate direction towards mouse
+        dx = mouse_x - player.centerx
+        dy = mouse_y - player.centery
+        dist = math.sqrt(dx*dx + dy*dy)
         
-        # Determine bullet direction based on player direction
-        if player_direction == "right":
-            dx, dy = bullet_speed, 0
-        elif player_direction == "left":
-            dx, dy = -bullet_speed, 0
-        else:
-            dx, dy = 0, bullet_speed  # Default to down if no horizontal direction
+        if dist > 0:
+            bullet_speed = 15.0
+            damage = 20 + (weapon_level * 5)
             
-        bullets.append({
-            "x": float(player.centerx),
-            "y": float(player.centery),
-            "dx": dx,
-            "dy": dy,
-            "damage": damage
-        })
-        
-        ammo -= 1
-        shoot_cooldown = 0.2
-        
-        if ammo == 0:
-            is_reloading = True
-            reload_time = 2.0
+            bullets.append({
+                "x": float(player.centerx),
+                "y": float(player.centery),
+                "dx": (dx / dist) * bullet_speed,
+                "dy": (dy / dist) * bullet_speed,
+                "damage": damage
+            })
             
-        return True
+            ammo -= 1
+            shoot_cooldown = 0.2
+            
+            if ammo == 0:
+                is_reloading = True
+                reload_time = 2.0
+                
+            return True
     return False
-
 def update_bullets(dt):
     """Update bullet positions and check collisions."""
     global bullets
@@ -983,7 +980,8 @@ while running:
                 is_reloading = True
                 reload_time = 2.0
                 message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
-    
+        # Get mouse position for aiming
+    mouse_x, mouse_y = pygame.mouse.get_pos()
     # ===== HOME SCREEN =====
     if on_home:
         screen.fill((30, 30, 60))
@@ -1017,10 +1015,12 @@ while running:
     mv_y = (keys_pressed[pygame.K_s] or keys_pressed[pygame.K_DOWN]) - (keys_pressed[pygame.K_w] or keys_pressed[pygame.K_UP])
     
     # Update player direction based on horizontal movement only
-    if mv_x > 0:  # Moving right
+        # Update player direction based on mouse position
+    if mouse_x > player.centerx + 10:  # Add small dead zone
         player_direction = "right"
-    elif mv_x < 0:  # Moving left
+    elif mouse_x < player.centerx - 10:
         player_direction = "left"
+    # Keep current direction if mouse is near center
     # If only vertical movement or no movement, keep current direction
     
     if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
