@@ -183,10 +183,14 @@ def load_object_image(obj_type, width, height):
     return load_image(f"objects/{obj_type}.png", width, height)
 
 def load_item_image(item_type):
+    """Load items with larger size for keys."""
+    if item_type == "key":
+        return load_image(f"items/{item_type}.png", 35, 35)  # Larger key
     return load_image(f"items/{item_type}.png", 25, 25)
 
 def load_npc_image(npc_type):
-    return load_image(f"npcs/{npc_type}.png", 35, 55)
+    """Load NPCs with larger size."""
+    return load_image(f"npcs/{npc_type}.png", 50, 70)  # Larger NPC
 
 # ===== GAME STATE =====
 health = 100
@@ -207,7 +211,7 @@ inventory = {
 quests = {
     "talk_to_elder": {"active": True, "complete": False, "description": "Talk to Elder Rowan"},
     "upgrade_sword": {"active": False, "complete": False, "description": "Visit the Blacksmith"},
-    "collect_herbs": {"active": False, "complete": False, "description": "Collect 5 Herbs from Forest"},
+    "collect_herbs": {"active": False, "complete": False, "description": "Collect 3 Herbs from Forest"},
     "rescue_knight": {"active": False, "complete": False, "description": "Rescue Knight Aelric"},
     "solve_drawbridge": {"active": False, "complete": False, "description": "Solve Drawbridge Puzzle"},
     "defeat_goblin_king": {"active": False, "complete": False, "description": "Defeat the Goblin King"},
@@ -218,6 +222,13 @@ quests = {
 collected_gold = set()
 collected_herbs = set()
 collected_potions = set()
+collected_keys = set()
+
+# ===== SAFE PUZZLE SYSTEM =====
+safe_code = "4231"  # The code the herb collector gives
+safe_input = ""
+safe_unlocked = False
+safe_visible = False
 
 # ===== UI FLAGS =====
 game_state = "main_menu"  # "main_menu", "how_to_play", "about", "playing"
@@ -231,10 +242,6 @@ dialogue_index = 0
 upgrade_shop_visible = False
 in_combat = False
 combat_enemies = []
-library_puzzle_active = False
-library_puzzle_solution = [1, 3, 5, 2, 4]
-library_puzzle_input = []
-library_key_unlocked = False
 
 # ===== MESSAGES =====
 message = ""
@@ -253,6 +260,12 @@ npc_dialogues = {
         "Knight Aelric: Thank you for rescuing me!",
         "Knight Aelric: The Goblin King holds the first Time Shard.",
         "Quest Updated: Defeat the Goblin King"
+    ],
+    (0, 2, 1, "herbcollector"): [
+        "Herb Collector: Ah, you found me!",
+        "Herb Collector: I've been studying ancient texts in this library.",
+        "Herb Collector: If you can bring me 3 herbs, I'll reward you.",
+        "Herb Collector: I might even share a secret code I discovered..."
     ],
 }
 
@@ -287,7 +300,6 @@ room_data = {
     (0, 0, 1): {
         "name": "Blacksmith's Forge",
         "objects": [
-            {"type": "building", "x": 250, "y": 200, "width": 150, "height": 120},
             {"type": "rock", "x": 150, "y": 500, "width": 100, "height": 100},
             {"type": "rock", "x": 600, "y": 600, "width": 50, "height": 50},
         ],
@@ -334,23 +346,22 @@ room_data = {
         "items": [
             {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
             {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
+            {"type": "key", "x": 500, "y": 200, "id": "key_0_1_0_1"},  # Key in Goblin Camp
         ]
     },
     
     (0, 1, 1): {
         "name": "Castle Bridge",
         "objects": [
-            {"type": "bridge_wall", "x": 0, "y": 350, "width": 200, "height": 100},
-            {"type": "bridge_wall", "x": 750, "y": 350, "width": 50, "height": 100},
-            {"type": "bridge", "x": 200, "y": 400, "width": 400, "height": 50},
+            # Removed bridge_wall and bridge objects
+            {"type": "rock", "x": 100, "y": 350, "width": 80, "height": 80},
+            {"type": "rock", "x": 620, "y": 350, "width": 80, "height": 80},
         ],
         "interactive": [
             {"type": "lever", "x": 700, "y": 350, "width": 40, "height": 60},
         ],
         "npcs": [],
-        "items": [
-            {"type": "key", "x": 400, "y": 250, "id": "key_0_1_1_1"},
-        ]
+        "items": []
     },
     
     (0, 1, 2): {
@@ -371,31 +382,30 @@ room_data = {
     (0, 2, 0): {
         "name": "Throne Room",
         "objects": [
-            {"type": "building", "x": 200, "y": 200, "width": 150, "height": 120},
-            {"type": "building", "x": 500, "y": 200, "width": 150, "height": 120},
+            {"type": "rock", "x": 200, "y": 200, "width": 80, "height": 80},
+            {"type": "rock", "x": 500, "y": 200, "width": 80, "height": 80},
         ],
         "interactive": [],
         "npcs": [],
         "items": [
             {"type": "gold", "x": 100, "y": 150, "id": "gold_0_2_0_1"},
             {"type": "gold", "x": 700, "y": 150, "id": "gold_0_2_0_2"},
+            {"type": "key", "x": 400, "y": 300, "id": "key_0_2_0_1"},  # Key in Throne Room
         ]
     },
     
     (0, 2, 1): {
         "name": "Secret Library",
         "objects": [
-            {"type": "building", "x": 100, "y": 150, "width": 150, "height": 120},
-            {"type": "building", "x": 600, "y": 200, "width": 150, "height": 120},
+            {"type": "rock", "x": 100, "y": 150, "width": 80, "height": 80},
+            {"type": "rock", "x": 600, "y": 200, "width": 80, "height": 80},
         ],
         "interactive": [
-            {"type": "bookshelf", "x": 350, "y": 300, "width": 100, "height": 120},
-            {"type": "rune", "x": 200, "y": 300, "width": 60, "height": 60},
-            {"type": "rune", "x": 300, "y": 300, "width": 60, "height": 60},
-            {"type": "rune", "x": 400, "y": 300, "width": 60, "height": 60},
-            {"type": "rune", "x": 500, "y": 300, "width": 60, "height": 60},
+            {"type": "safe", "x": 350, "y": 300, "width": 100, "height": 100},
         ],
-        "npcs": [],
+        "npcs": [
+            {"id": "herbcollector", "x": 400, "y": 500, "name": "Herb Collector"},  # Moved to library
+        ],
         "items": [
             {"type": "gold", "x": 250, "y": 400, "id": "gold_0_2_1_1"},
         ]
@@ -447,6 +457,7 @@ def shoot_bullet():
                 
             return True
     return False
+
 def update_bullets(dt):
     """Update bullet positions and check collisions."""
     global bullets
@@ -498,7 +509,7 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     if obj_type in ["tree", "rock", "building", "bridge_wall", "bridge"]:
         colliders.append(rect)
     
-    if obj_type in ["anvil", "campfire", "cage", "lever", "portal", "bookshelf", "rune"]:
+    if obj_type in ["anvil", "campfire", "cage", "lever", "portal", "bookshelf", "rune", "safe"]:
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         if obj_type != "portal":  # Portal doesn't block movement
             colliders.append(rect)
@@ -525,7 +536,7 @@ def draw_npc(surface, x, y, npc_id):
     """Draw NPCs using images."""
     img = load_npc_image(npc_id)
     surface.blit(img, (x, y))
-    rect = pygame.Rect(x, y, 35, 55)
+    rect = pygame.Rect(x, y, 50, 70)  # Larger collision box for larger NPC
     colliders.append(rect)
     npcs.append(rect)
     return rect
@@ -540,7 +551,12 @@ def draw_item(surface, x, y, item_type, item_id):
     
     img = load_item_image(item_type)
     surface.blit(img, (x, y))
-    rect = pygame.Rect(x, y, 25, 25)
+    
+    # Create appropriate sized collision rectangle
+    if item_type == "key":
+        rect = pygame.Rect(x, y, 35, 35)  # Larger collision for key
+    else:
+        rect = pygame.Rect(x, y, 25, 25)
     
     # Add to appropriate list
     if item_type == "gold":
@@ -550,7 +566,7 @@ def draw_item(surface, x, y, item_type, item_id):
     elif item_type == "potion":
         potions.append((rect, x, y))
     elif item_type == "key":
-        # Add to keys list if you have one
+        # Keys are handled separately in pickup_items function
         pass
     
     return rect
@@ -562,6 +578,8 @@ def get_collected_set(item_type):
         return collected_herbs
     elif item_type == "potion":
         return collected_potions
+    elif item_type == "key":
+        return collected_keys
     return set()
 
 def draw_room(surface, level, row, col):
@@ -810,6 +828,68 @@ def draw_upgrade_shop(surface):
         hint_text = small_font.render(hint, True, (200, 200, 200))
         surface.blit(hint_text, (150, y + i * 20))
 
+def draw_safe_puzzle(surface):
+    """Draw the safe puzzle interface."""
+    if not safe_visible:
+        return
+    
+    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    surface.blit(overlay, (0, 0))
+    
+    box = pygame.Rect(200, 200, 400, 300)
+    pygame.draw.rect(surface, (50, 50, 70), box)
+    pygame.draw.rect(surface, (200, 180, 50), box, 4)
+    
+    title = font.render("SAFE LOCK", True, (255, 215, 0))
+    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 220))
+    
+    # Display current input
+    input_text = font.render(f"Code: {safe_input}", True, (255, 255, 255))
+    surface.blit(input_text, (ROOM_WIDTH//2 - input_text.get_width()//2, 280))
+    
+    if safe_unlocked:
+        success_text = font.render("SAFE UNLOCKED! Key found!", True, (0, 255, 0))
+        surface.blit(success_text, (ROOM_WIDTH//2 - success_text.get_width()//2, 320))
+    else:
+        hint_text = small_font.render("Enter the 4-digit code", True, (200, 200, 200))
+        surface.blit(hint_text, (ROOM_WIDTH//2 - hint_text.get_width()//2, 320))
+    
+    # Number buttons
+    button_size = 50
+    buttons = []
+    for i in range(3):
+        for j in range(3):
+            num = i * 3 + j + 1
+            x = box.x + 100 + j * 60
+            y = box.y + 150 + i * 60
+            button_rect = pygame.Rect(x, y, button_size, button_size)
+            pygame.draw.rect(surface, (80, 80, 100), button_rect)
+            pygame.draw.rect(surface, (200, 200, 220), button_rect, 2)
+            
+            num_text = font.render(str(num), True, (255, 255, 255))
+            surface.blit(num_text, (x + button_size//2 - num_text.get_width()//2, 
+                                  y + button_size//2 - num_text.get_height()//2))
+            buttons.append((button_rect, str(num)))
+    
+    # Clear button
+    clear_rect = pygame.Rect(box.x + 50, box.y + 150, 80, 40)
+    pygame.draw.rect(surface, (180, 80, 80), clear_rect)
+    pygame.draw.rect(surface, (220, 150, 150), clear_rect, 2)
+    clear_text = small_font.render("CLEAR", True, (255, 255, 255))
+    surface.blit(clear_text, (clear_rect.centerx - clear_text.get_width()//2, 
+                            clear_rect.centery - clear_text.get_height()//2))
+    
+    # Close button
+    close_rect = pygame.Rect(box.x + 270, box.y + 150, 80, 40)
+    pygame.draw.rect(surface, (80, 80, 180), close_rect)
+    pygame.draw.rect(surface, (150, 150, 220), close_rect, 2)
+    close_text = small_font.render("CLOSE", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, 
+                            close_rect.centery - close_text.get_height()//2))
+    
+    return buttons, clear_rect, close_rect
+
 # ===== NEW UI FUNCTIONS =====
 def create_button(text, x, y, width, height, hover=False):
     """Create a button with hover effect."""
@@ -880,7 +960,7 @@ def draw_how_to_play():
         "• Collect gold, herbs, and potions",
         "• Complete quests from NPCs",
         "• Upgrade your weapon and armor",
-        "• Solve puzzles and defeat bosses to progress",
+        "• Solve challenging puzzles and riddles",
         "• Find Time Shards to travel through time"
     ]
     
@@ -1014,7 +1094,7 @@ def pickup_items():
             inventory["Herbs"] += 1
             collected_herbs.add((*current_room, x, y))
             message, message_color, message_timer = "+1 Herb", (0, 255, 0), 1.5
-            if inventory["Herbs"] >= 5 and not quests["collect_herbs"]["complete"]:
+            if inventory["Herbs"] >= 3 and not quests["collect_herbs"]["complete"]:  # Changed to 3 herbs
                 quests["collect_herbs"]["complete"] = True
     
     for rect, x, y in potions:
@@ -1022,11 +1102,28 @@ def pickup_items():
             inventory["Health Potions"] += 1
             collected_potions.add((*current_room, x, y))
             message, message_color, message_timer = "+1 Health Potion", (255, 0, 0), 1.5
+    
+    # Handle key pickup
+    room_key = tuple(current_room)
+    room_info = room_data.get(room_key, {})
+    for item in room_info.get("items", []):
+        if item["type"] == "key":
+            # Create appropriate sized collision rectangle for key
+            if item["type"] == "key":
+                item_rect = pygame.Rect(item["x"], item["y"], 35, 35)
+            else:
+                item_rect = pygame.Rect(item["x"], item["y"], 25, 25)
+                
+            if player.colliderect(item_rect.inflate(20, 20)) and (room_key[0], room_key[1], room_key[2], item["x"], item["y"]) not in collected_keys:
+                inventory["Keys"] += 1
+                collected_keys.add((room_key[0], room_key[1], room_key[2], item["x"], item["y"]))
+                message, message_color, message_timer = "+1 Key", (255, 215, 0), 1.5
+                break
 
 def handle_interaction():
     """Handle F key interactions."""
     global dialogue_active, current_dialogue, dialogue_index, upgrade_shop_visible
-    global library_puzzle_active, library_puzzle_input, library_key_unlocked, message, message_timer, message_color
+    global safe_visible, safe_input, safe_unlocked, message, message_timer, message_color
     
     room_key = tuple(current_room)
     
@@ -1041,7 +1138,7 @@ def handle_interaction():
     for npc_rect in npcs:
         if player.colliderect(npc_rect.inflate(50, 50)):
             for npc in room_data.get(room_key, {}).get("npcs", []):
-                npc_rect_check = pygame.Rect(npc["x"], npc["y"], 35, 55)
+                npc_rect_check = pygame.Rect(npc["x"], npc["y"], 50, 70)  # Updated for larger NPC
                 if npc_rect_check.colliderect(npc_rect):
                     dialogue_key = (room_key[0], room_key[1], room_key[2], npc["id"])
                     if dialogue_key in npc_dialogues:
@@ -1058,6 +1155,11 @@ def handle_interaction():
                             quests["rescue_knight"]["complete"] = True
                             quests["defeat_goblin_king"]["active"] = True
                             message, message_color, message_timer = "Knight Rescued!", (0, 255, 0), 2.0
+                        elif npc["id"] == "herbcollector" and inventory["Herbs"] >= 3 and not quests["collect_herbs"]["complete"]:  # Changed to 3 herbs
+                            quests["collect_herbs"]["complete"] = True
+                            # Add the safe code to the dialogue
+                            current_dialogue.append(f"Herb Collector: The code is {safe_code}. Remember it!")
+                            message, message_color, message_timer = "You received the safe code!", (0, 255, 0), 2.0
                     return
     
     # Check for interactive objects
@@ -1076,29 +1178,35 @@ def handle_interaction():
                     quests["solve_drawbridge"]["complete"] = True
                     message, message_color, message_timer = "Drawbridge Lowered!", (0, 255, 0), 2.0
             
-            elif obj_type == "bookshelf" and room_key == (0, 2, 1):
-                if not library_puzzle_active and not library_key_unlocked:
-                    library_puzzle_active = True
-                    library_puzzle_input = []
-                    message, message_color, message_timer = "Rune Puzzle Activated!", (255, 215, 0), 2.0
-            
-            elif obj_type == "rune" and room_key == (0, 2, 1) and library_puzzle_active:
-                # Simple puzzle - just press any 3 runes
-                library_puzzle_input.append(1)  # Simplified
-                if len(library_puzzle_input) >= 3:
-                    library_key_unlocked = True
-                    library_puzzle_active = False
-                    inventory["Keys"] += 1
-                    message, message_color, message_timer = "Puzzle Solved! Key Obtained!", (0, 255, 0), 2.0
+            elif obj_type == "safe" and room_key == (0, 2, 1):
+                if not safe_unlocked:
+                    safe_visible = True
+                    safe_input = ""
                 else:
-                    message, message_color, message_timer = f"Rune pressed... {3-len(library_puzzle_input)} more", (200, 200, 255), 1.5
+                    message, message_color, message_timer = "The safe is already unlocked.", (200, 200, 200), 1.5
             
             elif obj_type == "portal" and room_key == (0, 2, 2):
-                if inventory["Keys"] >= 1:
+                if inventory["Keys"] >= 2:  # Need both keys now
                     message, message_color, message_timer = "Portal Activated! Moving to next era...", (150, 150, 255), 2.0
                     # Here you would transition to Level 1
                 else:
-                    message, message_color, message_timer = "You need a key to activate the portal!", (255, 200, 0), 2.0
+                    message, message_color, message_timer = f"You need {2 - inventory['Keys']} more key(s) to activate the portal!", (255, 200, 0), 2.0
+
+def handle_safe_input(number):
+    """Handle number input for the safe puzzle."""
+    global safe_input, safe_unlocked, message, message_timer, message_color
+    
+    if len(safe_input) < 4:
+        safe_input += number
+        
+        if len(safe_input) == 4:
+            if safe_input == safe_code:
+                safe_unlocked = True
+                inventory["Keys"] += 1
+                message, message_color, message_timer = "Safe unlocked! You found a key!", (0, 255, 0), 2.0
+            else:
+                safe_input = ""
+                message, message_color, message_timer = "Wrong code! Try again.", (255, 0, 0), 1.5
 
 # ===== MAIN GAME LOOP =====
 running = True
@@ -1126,6 +1234,8 @@ while running:
             elif game_state in ["how_to_play", "about"]:
                 back_button = draw_how_to_play() if game_state == "how_to_play" else draw_about()
                 back_button_hover = back_button.collidepoint(mouse_pos)
+            elif game_state == "playing" and safe_visible:
+                buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if game_state == "main_menu":
@@ -1141,10 +1251,35 @@ while running:
                 back_button = draw_how_to_play() if game_state == "how_to_play" else draw_about()
                 if back_button.collidepoint(mouse_pos):
                     game_state = "main_menu"
+            
+            elif game_state == "playing" and safe_visible:
+                buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
+                
+                # Check number buttons
+                for button_rect, number in buttons:
+                    if button_rect.collidepoint(mouse_pos):
+                        handle_safe_input(number)
+                
+                # Check clear button
+                if clear_rect.collidepoint(mouse_pos):
+                    safe_input = ""
+                
+                # Check close button
+                if close_rect.collidepoint(mouse_pos):
+                    safe_visible = False
         
         elif event.type == pygame.KEYDOWN:
             if game_state == "playing":
-                if dialogue_active and event.key == pygame.K_SPACE:
+                if safe_visible:
+                    # Handle number input for safe
+                    if event.unicode.isdigit() and len(safe_input) < 4:
+                        handle_safe_input(event.unicode)
+                    elif event.key == pygame.K_BACKSPACE:
+                        safe_input = safe_input[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        safe_visible = False
+                
+                elif dialogue_active and event.key == pygame.K_SPACE:
                     dialogue_index += 1
                     if dialogue_index >= len(current_dialogue):
                         dialogue_active = False
@@ -1196,7 +1331,7 @@ while running:
                     handle_interaction()
                 
                 # Shooting with SPACE key
-                elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active:
+                elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active and not safe_visible:
                     if shoot_bullet():
                         message, message_color, message_timer = "Pew!", (255, 255, 0), 0.5
                     elif not has_weapon:
@@ -1213,7 +1348,7 @@ while running:
                     message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
                 
                 # ESC to return to main menu
-                elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible:
+                elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible and not safe_visible:
                     game_state = "main_menu"
             
             # Allow ESC to go back from how to play or about screens
@@ -1248,7 +1383,7 @@ while running:
         # Keep current direction if mouse is near center
         # If only vertical movement or no movement, keep current direction
         
-        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
+        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible:
             mv_x, mv_y = 0, 0
         
         dx, dy = mv_x * player_speed, mv_y * player_speed
@@ -1292,6 +1427,10 @@ while running:
         draw_upgrade_shop(screen)
         draw_weapon_hud(screen)
         
+        # Draw safe puzzle if active
+        if safe_visible:
+            buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
+        
         # Show interaction hint
         near_object = False
         for inter_obj in interactive_objects:
@@ -1303,7 +1442,7 @@ while running:
                 near_object = True
                 break
         
-        if near_object and not dialogue_active and not upgrade_shop_visible:
+        if near_object and not dialogue_active and not upgrade_shop_visible and not safe_visible:
             hint = small_font.render("Press F to Interact", True, (255, 255, 255))
             screen.blit(hint, (player.centerx - 40, player.top - 25))
         
