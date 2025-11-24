@@ -212,7 +212,11 @@ def get_npc_size(npc_type):
     elif npc_type == "boss1":
         return (100, 120) 
     elif npc_type == "herbcollector":
+<<<<<<< HEAD
         return (70, 90)  
+=======
+        return (70, 90)  # Larger herb collector (increased from 50,70)
+>>>>>>> cdgfinal/dev
     elif npc_type == "knight":
         return (50, 70) 
     return (35, 55)
@@ -300,6 +304,9 @@ boss_axe_swinging = False
 boss_axe_damage = 40  # Increased boss damage
 boss_defeated = False
 boss_drop_collected = False
+boss_phase = 1  # 1 = first phase, 2 = second phase
+boss_thrown_axes = []  # List of thrown axes in phase 2
+boss_throw_cooldown = 0
 
 # ===== UI FLAGS =====
 game_state = "main_menu" 
@@ -321,7 +328,6 @@ message_timer = 0.0
 message_color = (255, 255, 255)
 
 # ===== NPCS & INTERACTIONS =====
-# ===== NPCS & INTERACTIONS =====
 npc_dialogues = {
     (0, 0, 0, "elder"): [
         "Elder Rowan: Welcome, brave Arin!",
@@ -341,13 +347,27 @@ npc_dialogues = {
         "Knight Aelric: I dropped my key when they captured me - you should find it nearby.",
         "Quest Updated: Defeat the Goblin King"
     ],
+<<<<<<< HEAD
     (0, 2, 1, "herbcollector_with_herbs"): [
         "Herb Collector: Thank you for the herbs!",
         "Herb Collector: As promised, here's the safe code: 4231",
         "Herb Collector: Use it to open the safe in this room.",
         "Quest Updated: Safe code received!"
+=======
+    (0, 2, 1, "herbcollector"): [
+        "Herb Collector: Ah, a traveler! I collect rare herbs from the forest.",
+        "Herb Collector: If you bring me 3 herbs, I can give you something useful.",
+        "Herb Collector: I know the combination to the safe in this room."
+    ],
+    (0, 2, 1, "herbcollector_with_herbs"): [
+        "Herb Collector: Wonderful! You found the herbs!",
+        "Herb Collector: As promised, here's the safe combination: 4231",
+        "Herb Collector: The safe contains something valuable for your journey.",
+        "Quest Updated: Safe combination received!"
+>>>>>>> cdgfinal/dev
     ],
 }
+
 # ===== GLOBAL OBJECT LISTS =====
 colliders = []
 gold_items = []
@@ -436,6 +456,7 @@ room_data = {
         ]
     },
     
+<<<<<<< HEAD
 (0, 1, 0): {
     "name": "Goblin Camp",
     "objects": [
@@ -455,6 +476,28 @@ room_data = {
         {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
     ]
 },
+=======
+    (0, 1, 0): {
+        "name": "Goblin Camp",
+        "objects": [
+            {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
+            {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
+            {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
+            {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
+        ],
+        "interactive": [
+            {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  # Moved to lower left
+        ],
+        "npcs": [
+            {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  # Moved with cage
+        ],
+        "items": [
+            {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
+            {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
+            # Key will be dropped when knight is rescued
+        ]
+    },
+>>>>>>> cdgfinal/dev
     
     (0, 1, 1): {
         "name": "Castle Bridge",
@@ -542,35 +585,53 @@ _init_goblins()
 # ===== BOSS FUNCTIONS =====
 def init_boss():
     """Initialize the boss in the throne room."""
-    global boss, boss_health, boss_max_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_defeated, boss_drop_collected
+    global boss, boss_health, boss_max_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_defeated, boss_drop_collected, boss_phase, boss_thrown_axes, boss_throw_cooldown
     boss_rect = pygame.Rect(350, 300, 100, 120)
     boss = {
         "rect": boss_rect,
         "alive": True,
         "last_direction": "right"
     }
+<<<<<<< HEAD
     boss_max_health = max_health * 3 
+=======
+    boss_max_health = max_health * 4  # QUADRUPLE player's health
+>>>>>>> cdgfinal/dev
     boss_health = boss_max_health
     boss_attack_cooldown = 0
     boss_axe = {"x": 0, "y": 0, "angle": 0, "swinging": False}
     boss_axe_angle = 0
     boss_defeated = False
     boss_drop_collected = False
+    boss_phase = 1
+    boss_thrown_axes = []
+    boss_throw_cooldown = 0
 
 def update_boss(dt):
     """Update boss behavior and attacks."""
-    global boss_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_axe_swinging, health, boss_defeated
+    global boss_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_axe_swinging, health, boss_defeated, boss_phase, boss_thrown_axes, boss_throw_cooldown
     
     if not boss or not boss["alive"]:
         return
     
     dt_sec = dt / 1000.0
     
+<<<<<<< HEAD
+=======
+    # Update attack cooldowns
+>>>>>>> cdgfinal/dev
     if boss_attack_cooldown > 0:
         boss_attack_cooldown -= dt_sec
+    if boss_throw_cooldown > 0:
+        boss_throw_cooldown -= dt_sec
     
+<<<<<<< HEAD
     # Boss movement 
     speed = 70  
+=======
+    # Boss movement - smart chasing with phase-based speed
+    speed = 70 if boss_phase == 1 else 100  # Faster in phase 2
+>>>>>>> cdgfinal/dev
     dx = player.centerx - boss["rect"].centerx
     dy = player.centery - boss["rect"].centery
     dist = math.hypot(dx, dy)
@@ -589,11 +650,32 @@ def update_boss(dt):
         boss["rect"].x = max(100, min(ROOM_WIDTH - boss["rect"].width - 100, boss["rect"].x))
         boss["rect"].y = max(100, min(ROOM_HEIGHT - boss["rect"].height - 100, boss["rect"].y))
     
+<<<<<<< HEAD
     # Attack if close enough and cooldown is ready
     if dist < 180 and boss_attack_cooldown <= 0:
         boss_axe_swinging = True
         boss_axe_angle = 0
         boss_attack_cooldown = 2.5  
+=======
+    # Phase 1: Melee attacks
+    if boss_phase == 1:
+        if dist < 180 and boss_attack_cooldown <= 0:
+            boss_axe_swinging = True
+            boss_axe_angle = 0
+            boss_attack_cooldown = 2.5  # 2.5 second cooldown
+    
+    # Phase 2: Melee + Ranged attacks
+    elif boss_phase == 2:
+        if dist < 180 and boss_attack_cooldown <= 0:
+            boss_axe_swinging = True
+            boss_axe_angle = 0
+            boss_attack_cooldown = 2.0  # Faster melee cooldown in phase 2
+        
+        # Throw axe if far enough and cooldown ready
+        if dist > 200 and boss_throw_cooldown <= 0:
+            throw_axe()
+            boss_throw_cooldown = 3.0  # 3 second cooldown for throwing
+>>>>>>> cdgfinal/dev
     
     # Handle axe swinging
     if boss_axe_swinging:
@@ -606,10 +688,71 @@ def update_boss(dt):
             axe_rect = calculate_axe_rect()
             if player.colliderect(axe_rect):
                 damage = boss_axe_damage - (armor_level * 5)  # Armor reduces damage
+                if boss_phase == 2:
+                    damage += 10  # More damage in phase 2
                 health = max(0, health - damage)
                 set_message(f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
+<<<<<<< HEAD
  
 def calculate_axe_rect(): # asked ai to help us with this function
+=======
+    
+    # Update thrown axes
+    update_thrown_axes(dt_sec)
+
+def throw_axe():
+    """Boss throws an axe towards the player in phase 2."""
+    if not boss:
+        return
+    
+    # Calculate direction towards player
+    dx = player.centerx - boss["rect"].centerx
+    dy = player.centery - boss["rect"].centery
+    dist = math.hypot(dx, dy)
+    
+    if dist > 0:
+        speed = 200  # pixels per second
+        boss_thrown_axes.append({
+            "x": float(boss["rect"].centerx),
+            "y": float(boss["rect"].centery),
+            "dx": (dx / dist) * speed,
+            "dy": (dy / dist) * speed,
+            "angle": 0
+        })
+        set_message("Boss throws an axe!", (255, 100, 100), 1.0)
+
+def update_thrown_axes(dt_sec):
+    """Update positions of thrown axes and check for collisions."""
+    global boss_thrown_axes, health
+    
+    axes_to_remove = []
+    
+    for i, axe in enumerate(boss_thrown_axes):
+        # Update position
+        axe["x"] += axe["dx"] * dt_sec
+        axe["y"] += axe["dy"] * dt_sec
+        axe["angle"] += 10  # Rotate axe
+        
+        # Remove if out of bounds
+        if (axe["x"] < -50 or axe["x"] > ROOM_WIDTH + 50 or 
+            axe["y"] < -50 or axe["y"] > ROOM_HEIGHT + 50):
+            axes_to_remove.append(i)
+            continue
+        
+        # Check collision with player
+        axe_rect = pygame.Rect(axe["x"] - 20, axe["y"] - 10, 40, 20)
+        if player.colliderect(axe_rect):
+            damage = 40 - (armor_level * 3)  # Thrown axe damage
+            health = max(0, health - damage)
+            set_message(f"Thrown axe hit for {damage} damage!", (255, 0, 0), 1.5)
+            axes_to_remove.append(i)
+    
+    # Remove axes
+    for i in sorted(axes_to_remove, reverse=True):
+        boss_thrown_axes.pop(i)
+
+def calculate_axe_rect():
+>>>>>>> cdgfinal/dev
     """Calculate the current position of the boss's axe."""
     if not boss:
         return pygame.Rect(0, 0, 0, 0)
@@ -647,6 +790,16 @@ def draw_boss(surface):
         
         surface.blit(rotated_axe, (axe_rect.x, axe_rect.y))
     
+<<<<<<< HEAD
+=======
+    # Draw thrown axes
+    for axe in boss_thrown_axes:
+        axe_img = load_axe_image()
+        rotated_axe = pygame.transform.rotate(axe_img, -axe["angle"])
+        surface.blit(rotated_axe, (axe["x"] - 40, axe["y"] - 20))
+    
+    # Draw boss health bar with phase indicator
+>>>>>>> cdgfinal/dev
     health_width = 300
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = 20
@@ -655,12 +808,13 @@ def draw_boss(surface):
     pygame.draw.rect(surface, (255, 0, 0), (health_x, health_y, health_width * (boss_health / boss_max_health), 25))
     pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 25), 2)
     
-    health_text = font.render(f"Goblin King: {int(boss_health)}/{boss_max_health}", True, (255, 255, 255))
+    phase_text = f"Goblin King (Phase {boss_phase}): {int(boss_health)}/{boss_max_health}"
+    health_text = font.render(phase_text, True, (255, 255, 255))
     surface.blit(health_text, (health_x + 5, health_y + 3))
 
 def check_boss_hit():
     """Check if bullets hit the boss."""
-    global boss_health, bullets, boss_defeated
+    global boss_health, bullets, boss_defeated, boss_phase
     
     if not boss or not boss["alive"]:
         return
@@ -671,6 +825,12 @@ def check_boss_hit():
         if boss["rect"].colliderect(bullet_rect):
             boss_health -= bullet["damage"]
             bullets_to_remove.append(i)
+            
+            # Check for phase transition
+            if boss_phase == 1 and boss_health <= boss_max_health // 2:
+                boss_phase = 2
+                boss_health = boss_max_health // 2  # Reset to half health for phase 2
+                set_message("The Goblin King enters Phase 2! He's faster and throws axes!", (255, 100, 100), 3.0)
             
             if boss_health <= 0:
                 boss["alive"] = False
@@ -721,7 +881,7 @@ def shoot_bullet():
         
         if dist > 0:
             bullet_speed = 15.0
-            damage = 20 + (weapon_level * 5)
+            damage = 20 + (weapon_level * 5)  # Weapon level increases damage
             
             bullets.append({
                 "x": float(player.centerx),
@@ -733,10 +893,6 @@ def shoot_bullet():
             
             ammo -= 1
             shoot_cooldown = 0.2
-            
-            if ammo == 0:
-                is_reloading = True
-                reload_time = 2.0
                 
             return True
     return False
@@ -799,10 +955,36 @@ def draw_weapon_hud(surface):
         if is_reloading:
             reload_text = font.render("RELOADING...", True, (255, 0, 0))
             surface.blit(reload_text, (10, 40))
+        elif ammo == 0:
+            reload_hint = font.render("Press R to reload", True, (255, 200, 0))
+            surface.blit(reload_hint, (10, 40))
         
         # Weapon level indicator
         weapon_text = small_font.render(f"Weapon Lvl: {weapon_level}", True, (200, 200, 255))
         surface.blit(weapon_text, (10, ROOM_HEIGHT - 60))
+
+# ===== PLAYER DEATH AND RESPAWN =====
+def respawn_player():
+    """Handle player respawn with penalties."""
+    global health, max_health, weapon_level, armor_level, player, current_room, ammo, is_reloading, reload_time
+    
+    # Apply penalties
+    if weapon_level > 1:
+        weapon_level -= 1
+    if armor_level > 0:
+        armor_level -= 1
+        max_health = 100 + (armor_level * 20)  # Recalculate max health
+    
+    # Reset player state
+    health = max_health
+    player.x = 100
+    player.y = ROOM_HEIGHT - 150
+    current_room = [0, 0, 0]  # Village center
+    ammo = max_ammo
+    is_reloading = False
+    reload_time = 0.0
+    
+    set_message("You died! Respawned in village. Lost 1 weapon and armor level.", (255, 100, 100), 4.0)
 
 # ===== DRAWING FUNCTIONS =====
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
@@ -860,8 +1042,7 @@ def handle_damage_zones(dt):
             
             if health <= 0:
                 health = 0
-                set_message("You died!", (255, 0, 0), 3.0)
-                # Add respawn logic here if needed
+                respawn_player()
         
         # Smooth pulsing red border effect while in damage zone
         pulse = (math.sin(pygame.time.get_ticks() * 0.01) + 1) * 0.5  # 0 to 1 smooth wave
@@ -1036,30 +1217,35 @@ def draw_room(surface, level, row, col):
     for item in room_info.get("items", []):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
-def draw_hud(surface):
-    """Draw HUD with health and inventory."""
-    if not hud_visible:
-        return
-    
-    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 200))
-    surface.blit(overlay, (0, 0))
-    
-    # Health bar at bottom middle
+def draw_health_bar(surface):
+    """Draw permanent health bar at bottom middle of screen."""
     health_width = 400
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = ROOM_HEIGHT - 50
     
+    # Background
     pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 30))
+    # Health fill
     pygame.draw.rect(surface, (0, 255, 0), (health_x, health_y, health_width * (health / max_health), 30))
+    # Border
     pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 30), 2)
     
+    # Health text
     health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
     surface.blit(health_text, (health_x + 10, health_y + 5))
     
     # Armor level
     armor_text = small_font.render(f"Armor Level: {armor_level}", True, (200, 255, 200))
     surface.blit(armor_text, (health_x + health_width - 150, health_y + 5))
+
+def draw_hud(surface):
+    """Draw HUD with inventory (health bar is now drawn separately)."""
+    if not hud_visible:
+        return
+    
+    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    surface.blit(overlay, (0, 0))
     
     # Inventory
     y = 100
@@ -1273,7 +1459,7 @@ def draw_safe_puzzle(surface):
         hint_text = small_font.render("Enter the 4-digit code", True, (200, 200, 200))
         surface.blit(hint_text, (ROOM_WIDTH//2 - hint_text.get_width()//2, 320))
     
-    # Number buttons
+    # Number buttons - repositioned to avoid overlap
     button_size = 50
     buttons = []
     for i in range(3):
@@ -1290,16 +1476,16 @@ def draw_safe_puzzle(surface):
                                   y + button_size//2 - num_text.get_height()//2))
             buttons.append((button_rect, str(num)))
     
-    # Clear button
-    clear_rect = pygame.Rect(box.x + 50, box.y + 150, 80, 40)
+    # Clear button - moved to avoid overlapping with number 1
+    clear_rect = pygame.Rect(box.x + 50, box.y + 270, 80, 40)  # Moved down
     pygame.draw.rect(surface, (180, 80, 80), clear_rect)
     pygame.draw.rect(surface, (220, 150, 150), clear_rect, 2)
     clear_text = small_font.render("CLEAR", True, (255, 255, 255))
     surface.blit(clear_text, (clear_rect.centerx - clear_text.get_width()//2, 
                             clear_rect.centery - clear_text.get_height()//2))
     
-    # Close button
-    close_rect = pygame.Rect(box.x + 270, box.y + 150, 80, 40)
+    # Close button - moved to avoid overlapping
+    close_rect = pygame.Rect(box.x + 270, box.y + 270, 80, 40)  # Moved down
     pygame.draw.rect(surface, (80, 80, 180), close_rect)
     pygame.draw.rect(surface, (150, 150, 220), close_rect, 2)
     close_text = small_font.render("CLOSE", True, (255, 255, 255))
@@ -1416,6 +1602,7 @@ def handle_maze_input():
                     break
         return True
     return False
+
 # ===== NEW UI FUNCTIONS =====
 def create_button(text, x, y, width, height, hover=False):
     """Create a button with hover effect."""
@@ -1804,6 +1991,7 @@ def handle_interaction():
                     # Here you would transition to Level 1
                 else:
                     set_message(f"You need {2 - inventory['Keys']} more key(s) to activate the portal!", (255, 200, 0), 2.0)
+
 def give_herbs_to_collector():
     """Handle G key to give herbs to the herb collector."""
     global dialogue_active, current_dialogue, dialogue_index
@@ -2002,7 +2190,7 @@ while running:
                     elif ammo == 0:
                         set_message("Out of ammo! Press R to reload", (255, 0, 0), 1.0)
                 
-                # Reload with R key
+                # Reload with R key - MANUAL RELOAD ONLY
                 elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
                     is_reloading = True
                     reload_time = 2.0
@@ -2071,6 +2259,10 @@ while running:
         # Handle damage zones
         handle_damage_zones(dt)
         
+        # Check for player death
+        if health <= 0:
+            respawn_player()
+        
         # Collect boss drops
         if tuple(current_room) == (0, 2, 0) and boss_defeated and not boss_drop_collected:
             collect_boss_drops()
@@ -2097,6 +2289,9 @@ while running:
         
         # Draw bullets
         draw_bullets(screen)
+        
+        # Draw permanent health bar (always visible)
+        draw_health_bar(screen)
             
         # Draw UI
         draw_hud(screen) 
