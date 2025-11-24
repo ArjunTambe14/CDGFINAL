@@ -6,7 +6,7 @@ import math
 
 pygame.init()
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
-# ===== UPGRADE COSTS =====
+
 # ===== GAME CONSTANTS =====
 ROOM_WIDTH = 800    
 ROOM_HEIGHT = 800
@@ -25,6 +25,11 @@ button_font = pygame.font.SysFont(None, 40)
 POINTER_COLOR = (255, 215, 0)
 POINTER_SIZE = 12
 POINTER_OFFSET_X = -20
+
+# ===== DAMAGE ZONES =====
+damage_zones = []
+damage_timer = 0.0
+DAMAGE_INTERVAL = 1.0  # Damage every second
 
 # ===== PLAYER SETUP =====
 player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
@@ -223,6 +228,8 @@ health = 100
 max_health = 100
 weapon_level = 1
 armor_level = 0
+GOBLIN_CONTACT_DAMAGE = 10
+goblin_contact_cooldown = 0.0  # seconds of i-frames after a goblin hit
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -403,9 +410,10 @@ room_data = {
     (0, 1, 0): {
         "name": "Goblin Camp",
         "objects": [
-            {"type": "rock", "x": 200, "y": 200, "width": 50, "height": 50},
-            {"type": "rock", "x": 550, "y": 250, "width": 50, "height": 50},
-            {"type": "campfire", "x": 400, "y": 300, "width": 60, "height": 60},
+            {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
+            {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
+            {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
+            {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
         ],
         "interactive": [
             {"type": "cage", "x": 400, "y": 500, "width": 70, "height": 70},
@@ -757,6 +765,19 @@ def draw_weapon_hud(surface):
 # ===== DRAWING FUNCTIONS =====
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     """Draw objects using images only."""
+    # For invisible barriers
+    if obj_type == "invisible":
+        rect = pygame.Rect(x, y, width, height)
+        colliders.append(rect)
+        return rect
+    
+    # For damage zones
+    if obj_type == "damage":
+        rect = pygame.Rect(x, y, width, height)
+        damage_zones.append(rect)
+        return rect
+        
+    # Rest of your existing code for visible objects...
     img = load_object_image(obj_type, width, height)
     surface.blit(img, (x, y))
     
@@ -773,6 +794,55 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
             colliders.append(rect)
     
     return rect
+
+def handle_damage_zones(dt):
+    """Check if player is in damage zones and apply damage."""
+    global health, damage_timer, message, message_timer, message_color
+    
+    damage_timer += dt / 1000.0  # Convert to seconds
+    
+    # Check if player is in any damage zone
+    player_in_damage_zone = False
+    for zone in damage_zones:
+        if player.colliderect(zone):
+            player_in_damage_zone = True
+            break
+    
+    if player_in_damage_zone:
+        # Apply damage every second
+        if damage_timer >= 1.0:
+            damage_timer = 0.0
+            health -= 5  # 5 damage per second
+            
+            set_message("-5 Health!", (255, 0, 0), 1.0)
+            
+            if health <= 0:
+                health = 0
+                set_message("You died!", (255, 0, 0), 3.0)
+                # Add respawn logic here if needed
+        
+        # Smooth pulsing red border effect while in damage zone
+        pulse = (math.sin(pygame.time.get_ticks() * 0.01) + 1) * 0.5  # 0 to 1 smooth wave
+        border_alpha = int(80 + pulse * 80)  # 80 to 160 alpha pulsing
+        border_width = int(5 + pulse * 10)   # 5 to 15 width pulsing
+        
+        # Create pulsing red border
+        border_surface = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+        
+        # Top border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, 0, ROOM_WIDTH, border_width))
+        # Bottom border  
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, ROOM_HEIGHT - border_width, ROOM_WIDTH, border_width))
+        # Left border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, 0, border_width, ROOM_HEIGHT))
+        # Right border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (ROOM_WIDTH - border_width, 0, border_width, ROOM_HEIGHT))
+        
+        screen.blit(border_surface, (0, 0))
+        
+    else:
+        # Reset timer when not in damage zone
+        damage_timer = 0.0
 
 def draw_player(surface, player_rect):
     """Draw player using directional sprite."""
@@ -864,7 +934,7 @@ def get_collected_set(item_type):
 
 def draw_room(surface, level, row, col):
     """Draw the current room using images only."""
-    global colliders, gold_items, herbs, potions, npcs, interactive_objects
+    global colliders, gold_items, herbs, potions, npcs, interactive_objects, damage_zones
 
     # Clear dynamic lists before repopulating this frame
     colliders = []
@@ -873,6 +943,7 @@ def draw_room(surface, level, row, col):
     potions = []
     npcs = []
     interactive_objects = []
+    damage_zones = []
 
     room_key = (level, row, col)
     room_info = room_data.get(room_key, {})
@@ -1379,8 +1450,11 @@ def update_goblins(dt):
         return
     if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
         return
+    global goblin_contact_cooldown, health
 
     dt_sec = dt / 1000.0
+    goblin_contact_cooldown = max(0.0, goblin_contact_cooldown - dt_sec)
+
     # Spawn next wave when current is cleared
     if not any(g.get("alive", True) for g in state["active"]):
         if state["wave_index"] < len(state["waves"]):
@@ -1411,6 +1485,13 @@ def update_goblins(dt):
         goblin["y"] += (dy / dist) * step
         goblin["x"] = max(0, min(ROOM_WIDTH - w, goblin["x"]))
         goblin["y"] = max(0, min(ROOM_HEIGHT - h, goblin["y"]))
+
+        # Contact damage
+        goblin_rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
+        if goblin_rect.colliderect(player) and goblin_contact_cooldown <= 0:
+            health = max(0, health - GOBLIN_CONTACT_DAMAGE)
+            goblin_contact_cooldown = 0.75
+            set_message(f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
 
 def pickup_items():
     """Handle item collection."""
@@ -1761,10 +1842,9 @@ while running:
             player_direction = "right"
         elif mouse_x < player.centerx - 10:
             player_direction = "left"
-        # Keep current direction if mouse is near center
-        # If only vertical movement or no movement, keep current direction
         
-        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
+        # Freeze movement when UI overlays or dialogue are active
+        if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible:
             mv_x, mv_y = 0, 0
         
         dx, dy = mv_x * player_speed, mv_y * player_speed
@@ -1782,6 +1862,9 @@ while running:
         # Movement & collision
         collision_check(dx, dy)
         room_transition()
+        
+        # Handle damage zones
+        handle_damage_zones(dt)
         
         # Update weapon systems
         if shoot_cooldown > 0:
