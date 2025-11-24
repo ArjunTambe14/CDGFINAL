@@ -4,9 +4,9 @@ import math
 
 pygame.init()
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
-
+# ===== UPGRADE COSTS =====
 # ===== GAME CONSTANTS =====
-ROOM_WIDTH = 800
+ROOM_WIDTH = 800    
 ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
@@ -19,6 +19,9 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 30)
 title_font = pygame.font.SysFont(None, 70)
 small_font = pygame.font.SysFont(None, 24)
+POINTER_COLOR = (255, 215, 0)
+POINTER_SIZE = 12
+POINTER_OFFSET_X = -20
 
 # ===== PLAYER SETUP =====
 player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
@@ -43,12 +46,71 @@ upgrade_costs = {
     "armor": {1: 25, 2: 45, 3: 70, 4: 95, 5: 130}
 }
 
-# ===== IMPROVED IMAGE SYSTEM =====
+# ===== SIMPLE IMAGE SYSTEM =====
 ASSETS_DIR = "assets"
 image_cache = {}
 
+def _placeholder_color(name: str):
+    """Pick a sensible placeholder color based on asset name."""
+    name = name.lower()
+    if "background" in name:
+        return (70, 100, 140)
+    if "character" in name or "npc" in name:
+        return (80, 140, 200)
+    if "tree" in name:
+        return (60, 140, 60)
+    if "rock" in name or "bridge" in name:
+        return (120, 120, 120)
+    if "rune" in name:
+        return (120, 80, 180)
+    if "bookshelf" in name:
+        return (140, 100, 60)
+    if "key" in name:
+        return (230, 200, 70)
+    if "portal" in name:
+        return (120, 180, 220)
+    if "campfire" in name:
+        return (200, 120, 60)
+    if "anvil" in name or "cage" in name:
+        return (100, 100, 130)
+    if "potion" in name:
+        return (180, 60, 60)
+    if "herb" in name:
+        return (60, 160, 100)
+    if "gold" in name:
+        return (230, 200, 50)
+    return (140, 140, 140)
+
+def create_placeholder(name, width, height):
+    """Create a non-magenta placeholder so missing assets are less jarring."""
+    w = width or 50
+    h = height or 50
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    color = _placeholder_color(name)
+    surf.fill(color)
+    pygame.draw.rect(surf, (20, 20, 20), surf.get_rect(), 2)
+    return surf
+
+def _auto_transparent_bg(img):
+    """If an image lacks alpha, treat the corner color as a colorkey."""
+    if img.get_flags() & pygame.SRCALPHA or img.get_alpha() is not None:
+        return img
+    w, h = img.get_size()
+    corner_color = img.get_at((0, 0))[:3]
+    corners = [
+        corner_color,
+        img.get_at((w - 1, 0))[:3],
+        img.get_at((0, h - 1))[:3],
+        img.get_at((w - 1, h - 1))[:3],
+    ]
+    if all(c == corner_color for c in corners):
+        img = img.convert()
+        img.set_colorkey(corner_color)
+        img = img.convert_alpha()
+    return img
+
 def load_image(name, width=None, height=None):
-    """Improved image loader with text labels on fallback squares."""
+    """Image loader with caching and readable placeholders."""
     cache_key = f"{name}_{width}x{height}" if width and height else name
     
     if cache_key in image_cache:
@@ -61,39 +123,30 @@ def load_image(name, width=None, height=None):
             try:
                 img = pygame.image.load(filepath).convert_alpha()
             except:
-                img = pygame.image.load(filepath).convert()
+                img = _auto_transparent_bg(pygame.image.load(filepath).convert())
+            else:
+                img = _auto_transparent_bg(img)
             
             if width and height:
                 img = pygame.transform.scale(img, (width, height))
             image_cache[cache_key] = img
             return img
-    except Exception as e:
-        print(f"Error loading {filepath}: {e}")
+    except:
+        pass
     
-    # Better fallback: semi-transparent surface with text label
-    fallback = pygame.Surface((width or 50, height or 50), pygame.SRCALPHA)
-    fallback.fill((255, 0, 255, 128))  # Semi-transparent magenta
-    
-    # Extract image name for label (remove folder path and extension)
-    image_name = name.split('/')[-1].split('.')[0]
-    
-    # Create text label
+    # Fallback: readable placeholder with label
+    fallback = create_placeholder(name, width, height)
     try:
-        # Use smaller font for better fit
-        label_font = pygame.font.SysFont(None, max(12, min(20, width // 5 if width else 12)))
+        image_name = name.split('/')[-1].split('.')[0]
+        label_font = pygame.font.SysFont(None, max(12, min(20, fallback.get_width() // 5)))
         text = label_font.render(image_name, True, (255, 255, 255))
-        text_rect = text.get_rect(center=(fallback.get_width()//2, fallback.get_height()//2))
-        
-        # Add background for text readability
+        text_rect = text.get_rect(center=(fallback.get_width() // 2, fallback.get_height() // 2))
         bg_rect = text_rect.inflate(10, 5)
         pygame.draw.rect(fallback, (0, 0, 0, 180), bg_rect)
         pygame.draw.rect(fallback, (255, 255, 255), bg_rect, 1)
-        
-        # Draw text
         fallback.blit(text, text_rect)
     except:
-        pass  # If text rendering fails, just show the colored square
-    
+        pass
     image_cache[cache_key] = fallback
     return fallback
 
@@ -139,6 +192,14 @@ health = 100
 max_health = 100
 weapon_level = 1
 armor_level = 0
+upgrade_costs = {
+    "weapon": {
+        1: 100,
+        2: 150,
+        3: 225,
+        4: 325,
+    }
+}
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -458,6 +519,17 @@ def draw_player(surface, player_rect):
     img = load_player_image(player_direction)  # Use the global player_direction
     surface.blit(img, (player_rect.x, player_rect.y))
 
+def draw_player_pointer(surface, player_rect):
+    """Draw a small pointer anchored to the player's left side."""
+    center_y = player_rect.centery
+    tip_x = player_rect.left + POINTER_OFFSET_X
+    points = [
+        (tip_x + POINTER_SIZE, center_y - POINTER_SIZE // 2),
+        (tip_x, center_y),
+        (tip_x + POINTER_SIZE, center_y + POINTER_SIZE // 2),
+    ]
+    pygame.draw.polygon(surface, POINTER_COLOR, points)
+
 def draw_npc(surface, x, y, npc_id):
     """Draw NPCs using images."""
     img = load_npc_image(npc_id)
@@ -521,9 +593,8 @@ def draw_room(surface, level, row, col):
     if bg_img:
         surface.blit(bg_img, (0, 0))
     else:
-        # Fallback background - use era-appropriate color
-        era_colors = [(80, 120, 80), (20, 20, 60), (100, 70, 40)]
-        surface.fill(era_colors[level])
+        # Fallback background
+        surface.fill((80, 120, 80))
 
     # Draw objects
     for obj in room_info.get("objects", []):
@@ -572,7 +643,7 @@ def draw_hud(surface):
             y += 30
 
 def draw_minimap(surface, level, row, col):
-    """Draw minimap showing current room - FIXED COORDINATES."""
+    """Draw minimap showing current room."""
     if not map_visible:
         return
     
@@ -581,22 +652,19 @@ def draw_minimap(surface, level, row, col):
     map_x = ROOM_WIDTH - map_size - 20
     map_y = 20
     
-    # Draw map background
     pygame.draw.rect(surface, (0, 0, 0, 180), (map_x - 5, map_y - 5, map_size + 10, map_size + 10))
     
-    # Draw grid - FIXED: Invert rows so (0,0) appears at bottom-left in minimap
     for r in range(3):
         for c in range(3):
             x = map_x + c * cell_size
-            y = map_y + (2 - r) * cell_size  # INVERT rows: 2-r instead of r
+            y = map_y + r * cell_size
             rect = pygame.Rect(x, y, cell_size - 2, cell_size - 2)
             
             if r == row and c == col:
-                pygame.draw.rect(surface, (255, 255, 0), rect)  # Current room - yellow
+                pygame.draw.rect(surface, (255, 255, 0), rect)
             else:
-                pygame.draw.rect(surface, (100, 100, 100), rect)  # Other rooms - gray
+                pygame.draw.rect(surface, (100, 100, 100), rect)
     
-    # Room name
     room_name = room_data.get((level, row, col), {}).get("name", "Unknown")
     name_text = small_font.render(room_name, True, (255, 255, 255))
     surface.blit(name_text, (map_x, map_y + map_size + 10))
@@ -1053,6 +1121,7 @@ while running:
     
     # Draw player
     draw_player(screen, player)
+    draw_player_pointer(screen, player)
     
     # Draw bullets
     draw_bullets(screen)
