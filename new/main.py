@@ -322,6 +322,7 @@ message_timer = 0.0
 message_color = (255, 255, 255)
 
 # ===== NPCS & INTERACTIONS =====
+# ===== NPCS & INTERACTIONS =====
 npc_dialogues = {
     (0, 0, 0, "elder"): [
         "Elder Rowan: Welcome, brave Arin!",
@@ -329,25 +330,20 @@ npc_dialogues = {
         "Elder Rowan: Start by visiting the Blacksmith for better gear.",
         "Quest Updated: Visit the Blacksmith"
     ],
-    (0, 1, 0, "knight"): [
+    (0, 1, 0, "knight"): [  # Knight when imprisoned
+        "Knight Aelric: Please, help me! I'm trapped in this cage!",
+        "Knight Aelric: The goblins captured me after the battle.",
+        "Knight Aelric: There's a lock mechanism on the cage - can you solve it?",
+        "Hint: Interact with the cage to try the lock puzzle"
+    ],
+    (0, 1, 0, "knight_rescued"): [  # Knight after rescue
         "Knight Aelric: Thank you for rescuing me!",
         "Knight Aelric: The Goblin King holds the first Time Shard.",
+        "Knight Aelric: I dropped my key when they captured me - you should find it nearby.",
         "Quest Updated: Defeat the Goblin King"
     ],
-    (0, 2, 1, "herbcollector"): [
-        "Herb Collector: Ah, you found me!",
-        "Herb Collector: I've been studying ancient texts in this library.",
-        "Herb Collector: If you can bring me 3 herbs, I'll reward you.",
-        "Herb Collector: I might even share a secret code I discovered..."
-    ],
-    (0, 2, 1, "herbcollector_with_herbs"): [
-        "Herb Collector: Wonderful! You brought me the herbs!",
-        "Herb Collector: As promised, here's the secret code I found: 4231",
-        "Herb Collector: There's a safe in this library that uses that code.",
-        "Quest Updated: Use the code on the safe"
-    ],
+    # ... rest of dialogues stay the same
 }
-
 # ===== GLOBAL OBJECT LISTS =====
 colliders = []
 gold_items = []
@@ -439,26 +435,26 @@ room_data = {
         ]
     },
     
-    (0, 1, 0): {
-        "name": "Goblin Camp",
-        "objects": [
-            {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
-            {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
-            {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
-            {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
-        ],
-        "interactive": [
-            {"type": "cage", "x": 400, "y": 500, "width": 70, "height": 70},
-        ],
-        "npcs": [
-            {"id": "knight", "x": 430, "y": 530, "name": "Knight Aelric", "rescued": False},
-        ],
-        "items": [
-            {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
-            {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
-            # Key will be dropped when knight is rescued
-        ]
-    },
+(0, 1, 0): {
+    "name": "Goblin Camp",
+    "objects": [
+        {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
+        {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
+        {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
+        {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
+    ],
+    "interactive": [
+        {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  # Moved to lower left
+    ],
+    "npcs": [
+        {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  # Moved with cage
+    ],
+    "items": [
+        {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
+        {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
+        # Key will be dropped when knight is rescued
+    ]
+},
     
     (0, 1, 1): {
         "name": "Castle Bridge",
@@ -1414,21 +1410,22 @@ def handle_maze_input():
         if maze_player_pos == maze_exit_pos:
             maze_completed = True
             maze_visible = False
-            # Knight is rescued
+            # Knight is rescued - move him outside the cage
             room_key = tuple(current_room)
             room_info = room_data.get(room_key, {})
             for npc in room_info.get("npcs", []):
                 if npc.get("id") == "knight":
                     npc["rescued"] = True
+                    npc["x"] = 500  # Move knight outside cage to the right
+                    npc["y"] = 450
                     quests["rescue_knight"]["complete"] = True
                     quests["defeat_goblin_king"]["active"] = True
-                    # Drop a key
-                    room_info["items"].append({"type": "key", "x": 430, "y": 600, "id": "key_0_1_0_2"})
+                    # Drop a key near the cage
+                    room_info["items"].append({"type": "key", "x": 450, "y": 500, "id": "key_0_1_0_2"})
                     set_message("Knight rescued! He dropped a key!", (0, 255, 0), 3.0)
                     break
         return True
     return False
-
 # ===== NEW UI FUNCTIONS =====
 def create_button(text, x, y, width, height, hover=False):
     """Create a button with hover effect."""
@@ -1744,21 +1741,36 @@ def handle_interaction():
                 npc_size = get_npc_size(npc["id"])
                 npc_rect_check = pygame.Rect(npc["x"], npc["y"], npc_size[0], npc_size[1])
                 if npc_rect_check.colliderect(npc_rect):
-                    dialogue_key = (room_key[0], room_key[1], room_key[2], npc["id"])
-                    if dialogue_key in npc_dialogues:
-                        current_dialogue = npc_dialogues[dialogue_key]
-                        dialogue_active = True
-                        dialogue_index = 0
+                    # Handle knight dialogue based on rescue status
+                    if npc["id"] == "knight":
+                        if npc.get("rescued", False):
+                            dialogue_key = (room_key[0], room_key[1], room_key[2], "knight_rescued")
+                        else:
+                            dialogue_key = (room_key[0], room_key[1], room_key[2], "knight")
                         
-                        # Quest completion
-                        if npc["id"] == "elder" and not quests["talk_to_elder"]["complete"]:
-                            quests["talk_to_elder"]["complete"] = True
-                            quests["upgrade_sword"]["active"] = True
-                            set_message("Quest Updated!", (0, 255, 0), 2.0)
-                        elif npc["id"] == "knight" and not quests["rescue_knight"]["complete"]:
-                            quests["rescue_knight"]["complete"] = True
-                            quests["defeat_goblin_king"]["active"] = True
-                            set_message("Knight Rescued!", (0, 255, 0), 2.0)
+                        if dialogue_key in npc_dialogues:
+                            current_dialogue = npc_dialogues[dialogue_key]
+                            dialogue_active = True
+                            dialogue_index = 0
+                            
+                            # Quest completion only when rescued
+                            if npc.get("rescued", False) and not quests["rescue_knight"]["complete"]:
+                                quests["rescue_knight"]["complete"] = True
+                                quests["defeat_goblin_king"]["active"] = True
+                                set_message("Knight Rescued!", (0, 255, 0), 2.0)
+                    else:
+                        # Other NPCs use normal dialogue
+                        dialogue_key = (room_key[0], room_key[1], room_key[2], npc["id"])
+                        if dialogue_key in npc_dialogues:
+                            current_dialogue = npc_dialogues[dialogue_key]
+                            dialogue_active = True
+                            dialogue_index = 0
+                            
+                            # Quest completion for elder
+                            if npc["id"] == "elder" and not quests["talk_to_elder"]["complete"]:
+                                quests["talk_to_elder"]["complete"] = True
+                                quests["upgrade_sword"]["active"] = True
+                                set_message("Quest Updated!", (0, 255, 0), 2.0)
                     return
     
     # Check for interactive objects
@@ -1780,7 +1792,7 @@ def handle_interaction():
                     maze_visible = True
                     maze_player_pos = [1, 1]  # Reset player position
                     maze_completed = False
-                    set_message("Solve the maze to rescue the knight!", (0, 255, 0), 2.0)
+                    set_message("Solve the maze to free the knight!", (0, 255, 0), 2.0)
                 else:
                     set_message("The knight has already been rescued!", (200, 200, 200), 1.5)
             
@@ -1802,7 +1814,6 @@ def handle_interaction():
                     # Here you would transition to Level 1
                 else:
                     set_message(f"You need {2 - inventory['Keys']} more key(s) to activate the portal!", (255, 200, 0), 2.0)
-
 def give_herbs_to_collector():
     """Handle G key to give herbs to the herb collector."""
     global dialogue_active, current_dialogue, dialogue_index
