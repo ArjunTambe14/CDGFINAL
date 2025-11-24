@@ -174,7 +174,7 @@ def load_smart_bg(level, row, col):
         (0, 0, 2): "forestPath",
         (0, 1, 0): "goblincamp",
         (0, 1, 1): "castlebridge",
-        (0, 1, 2): "courtyard",
+        (0, 1, 2): "castleCourtYard",
         (0, 2, 0): "throneroom",
         (0, 2, 1): "library",
         (0, 2, 2): "portal",
