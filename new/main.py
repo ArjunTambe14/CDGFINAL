@@ -26,7 +26,10 @@ button_font = pygame.font.SysFont(None, 40)
 POINTER_COLOR = (255, 215, 0)
 POINTER_SIZE = 12
 POINTER_OFFSET_X = -20
-
+# ===== DAMAGE ZONES =====
+damage_zones = []
+damage_timer = 0.0
+DAMAGE_INTERVAL = 1.0  # Damage every 0.5 seconds
 # ===== PLAYER SETUP =====
 player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
 player_speed = 7
@@ -359,7 +362,8 @@ room_data = {
         "objects": [
             {"type": "rock", "x": 20, "y": 100, "width": 50, "height": 50},
             {"type": "rock", "x": 650, "y": 250, "width": 50, "height": 50},
-            {"type": "invisible", "x": 600, "y": 200, "width": 120, "height": 100},
+            {"type": "damage", "x": 325, "y": 340, "width": 160, "height": 150},
+            {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
         ],
         "interactive": [
             {"type": "cage", "x": 400, "y": 500, "width": 70, "height": 70},
@@ -560,21 +564,31 @@ def draw_weapon_hud(surface):
 # ===== DRAWING FUNCTIONS =====
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     """Draw objects using images only."""
-    # For invisible barriers, only create collision rect, don't draw anything
+    # For invisible barriers
     if obj_type == "invisible":
         rect = pygame.Rect(x, y, width, height)
         colliders.append(rect)
-        
-        # Draw red outline in development mode
         if DEV_MODE:
-            pygame.draw.rect(surface, (255, 0, 0), rect, 2)  # Red outline
-            # Optional: Add semi-transparent fill
+            pygame.draw.rect(surface, (255, 0, 0), rect, 2)
             debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-            debug_surface.fill((255, 0, 0, 64))  # Semi-transparent red
+            debug_surface.fill((255, 0, 0, 64))
             surface.blit(debug_surface, (x, y))
-            
         return rect
     
+    # For damage zones
+   # For damage zones
+    if obj_type == "damage":
+        rect = pygame.Rect(x, y, width, height)
+        damage_zones.append(rect)
+        
+        # Only show outline in dev mode, no red surface
+        if DEV_MODE:
+            # Draw pulsing red outline for visibility in dev mode
+            pulse = math.sin(pygame.time.get_ticks() * 0.01) * 64 + 64
+            pygame.draw.rect(surface, (255, 50, 50, int(pulse)), rect, 3)
+        
+        return rect
+        
     # Rest of your existing code for visible objects...
     img = load_object_image(obj_type, width, height)
     surface.blit(img, (x, y))
@@ -592,7 +606,54 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
             colliders.append(rect)
     
     return rect
-
+def handle_damage_zones(dt):
+    """Check if player is in damage zones and apply damage."""
+    global health, damage_timer, message, message_timer, message_color
+    
+    damage_timer += dt / 1000.0  # Convert to seconds
+    
+    # Check if player is in any damage zone
+    player_in_damage_zone = False
+    for zone in damage_zones:
+        if player.colliderect(zone):
+            player_in_damage_zone = True
+            break
+    
+    if player_in_damage_zone:
+        # Apply damage every second
+        if damage_timer >= 1.0:
+            damage_timer = 0.0
+            health -= 5  # 5 damage per second
+            
+            set_message("-5 Health!", (255, 0, 0), 1.0)
+            
+            if health <= 0:
+                health = 0
+                set_message("You died!", (255, 0, 0), 3.0)
+                # Add respawn logic here if needed
+        
+        # Smooth pulsing red border effect while in damage zone
+        pulse = (math.sin(pygame.time.get_ticks() * 0.01) + 1) * 0.5  # 0 to 1 smooth wave
+        border_alpha = int(80 + pulse * 80)  # 80 to 160 alpha pulsing
+        border_width = int(5 + pulse * 10)   # 5 to 15 width pulsing
+        
+        # Create pulsing red border
+        border_surface = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+        
+        # Top border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, 0, ROOM_WIDTH, border_width))
+        # Bottom border  
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, ROOM_HEIGHT - border_width, ROOM_WIDTH, border_width))
+        # Left border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (0, 0, border_width, ROOM_HEIGHT))
+        # Right border
+        pygame.draw.rect(border_surface, (255, 0, 0, border_alpha), (ROOM_WIDTH - border_width, 0, border_width, ROOM_HEIGHT))
+        
+        screen.blit(border_surface, (0, 0))
+        
+    else:
+        # Reset timer when not in damage zone
+        damage_timer = 0.0
 def draw_player(surface, player_rect):
     """Draw player using directional sprite."""
     img = load_player_image(player_direction)  # Use the global player_direction
@@ -756,10 +817,11 @@ def draw_minimap(surface, level, row, col):
     for r in range(3):
         for c in range(3):
             x = map_x + c * cell_size
-            y = map_y + r * cell_size  # Fixed: r represents row from top to bottom
+            y = map_y + (2 - r) * cell_size  # Invert the row coordinate
             rect = pygame.Rect(x, y, cell_size - 2, cell_size - 2)
             
-            if r == row and c == col:  # Now correctly matches game coordinates
+            # Check if this is the current room (note: r and row use same coordinate system)
+            if r == row and c == col:
                 pygame.draw.rect(surface, (255, 255, 0), rect)
             else:
                 pygame.draw.rect(surface, (100, 100, 100), rect)
@@ -1312,12 +1374,12 @@ while running:
                         if inventory["Gold"] >= cost:
                             inventory["Gold"] -= cost
                             weapon_level = next_level
-                            message, message_color, message_timer = f"Weapon upgraded to level {weapon_level}!", (0, 255, 0), 2.0
+                            set_message(f"Weapon upgraded to level {weapon_level}!", (0, 255, 0), 2.0)
                             if weapon_level > 1 and not quests["upgrade_sword"]["complete"]:
                                 quests["upgrade_sword"]["complete"] = True
                                 quests["collect_herbs"]["active"] = True
                         else:
-                            message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                            set_message("Not enough gold!", (255, 0, 0), 1.5)
                     
                     elif event.key == pygame.K_2 and armor_level < 5:
                         next_level = armor_level + 1
@@ -1327,9 +1389,9 @@ while running:
                             armor_level = next_level
                             max_health = 100 + (armor_level * 20)  # +20 health per armor level
                             health = min(health, max_health)  # Cap current health to new max
-                            message, message_color, message_timer = f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0
+                            set_message(f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0)
                         else:
-                            message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                            set_message("Not enough gold!", (255, 0, 0), 1.5)
                     
                     elif event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
                         upgrade_shop_visible = False
@@ -1346,7 +1408,7 @@ while running:
                 elif event.key == pygame.K_h and inventory["Health Potions"] > 0 and health < max_health:
                     inventory["Health Potions"] -= 1
                     health = min(max_health, health + 30)
-                    message, message_color, message_timer = "+30 Health", (0, 255, 0), 1.5
+                    set_message("+30 Health", (0, 255, 0), 1.5)
                 
                 elif event.key == pygame.K_f:
                     handle_interaction()
@@ -1354,19 +1416,19 @@ while running:
                 # Shooting with SPACE key
                 elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active:
                     if shoot_bullet():
-                        message, message_color, message_timer = "Pew!", (255, 255, 0), 0.5
+                        set_message("Pew!", (255, 255, 0), 0.5)
                     elif not has_weapon:
-                        message, message_color, message_timer = "No weapon equipped!", (255, 0, 0), 1.0
+                        set_message("No weapon equipped!", (255, 0, 0), 1.0)
                     elif is_reloading:
-                        message, message_color, message_timer = "Reloading...", (255, 200, 0), 0.5
+                        set_message("Reloading...", (255, 200, 0), 0.5)
                     elif ammo == 0:
-                        message, message_color, message_timer = "Out of ammo! Press R to reload", (255, 0, 0), 1.0
+                        set_message("Out of ammo! Press R to reload", (255, 0, 0), 1.0)
                 
                 # Reload with R key
                 elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
                     is_reloading = True
                     reload_time = 2.0
-                    message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
+                    set_message("Reloading...", (255, 200, 0), 1.0)
                 
                 # ESC to return to main menu
                 elif event.key == pygame.K_ESCAPE and not upgrade_shop_visible:
@@ -1380,7 +1442,6 @@ while running:
     mouse_x, mouse_y = pygame.mouse.get_pos()
     
     # ===== SCREEN RENDERING =====
-    # Route to the appropriate scene based on game_state.
     if game_state == "main_menu":
         play_button, how_to_button, about_button = draw_main_menu()
     
@@ -1402,8 +1463,6 @@ while running:
             player_direction = "right"
         elif mouse_x < player.centerx - 10:
             player_direction = "left"
-        # Keep current direction if mouse is near center
-        # If only vertical movement or no movement, keep current direction
         
         # Freeze movement when UI overlays or dialogue are active
         if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible:
@@ -1433,6 +1492,9 @@ while running:
                 reload_time = 0.0
         
         update_bullets(dt)
+        
+        # Handle damage zones
+        handle_damage_zones(dt)
         
         # Pickup items
         pickup_items()
