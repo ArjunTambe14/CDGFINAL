@@ -27,10 +27,20 @@ current_room = [0, 0, 0]
 previous_room = tuple(current_room)
 player_direction = "right"  # Start facing right
 
+# ===== WEAPON SYSTEM =====
+bullets = []
+ammo = 30
+max_ammo = 30
+reload_time = 0.0
+is_reloading = False
+player_angle = 0.0
+shoot_cooldown = 0.0
+has_weapon = True  # Player starts with a weapon
+
 # ===== UPGRADE SYSTEM =====
 upgrade_costs = {
-    "weapon": {1: 30, 2: 50, 3: 75, 4: 100},
-    "armor": {1: 25, 2: 45, 3: 70, 4: 95}
+    "weapon": {1: 30, 2: 50, 3: 75, 4: 100, 5: 150},
+    "armor": {1: 25, 2: 45, 3: 70, 4: 95, 5: 130}
 }
 
 # ===== IMPROVED IMAGE SYSTEM =====
@@ -86,6 +96,7 @@ def load_image(name, width=None, height=None):
     
     image_cache[cache_key] = fallback
     return fallback
+
 def load_smart_bg(level, row, col):
     """Load background using smart mapping."""
     if level != 0:
@@ -346,6 +357,82 @@ room_data = {
     },
 }
 
+# ===== WEAPON FUNCTIONS =====
+def shoot_bullet():
+    """Shoot a bullet in the direction the player is facing."""
+    global ammo, shoot_cooldown, is_reloading
+    
+    if not has_weapon:
+        return False
+        
+    if not is_reloading and ammo > 0 and shoot_cooldown <= 0:
+        bullet_speed = 15.0
+        damage = 20 + (weapon_level * 5)
+        
+        # Determine bullet direction based on player direction
+        if player_direction == "right":
+            dx, dy = bullet_speed, 0
+        elif player_direction == "left":
+            dx, dy = -bullet_speed, 0
+        else:
+            dx, dy = 0, bullet_speed  # Default to down if no horizontal direction
+            
+        bullets.append({
+            "x": float(player.centerx),
+            "y": float(player.centery),
+            "dx": dx,
+            "dy": dy,
+            "damage": damage
+        })
+        
+        ammo -= 1
+        shoot_cooldown = 0.2
+        
+        if ammo == 0:
+            is_reloading = True
+            reload_time = 2.0
+            
+        return True
+    return False
+
+def update_bullets(dt):
+    """Update bullet positions and check collisions."""
+    global bullets
+    
+    bullets_to_remove = []
+    for i, bullet in enumerate(bullets):
+        bullet["x"] += bullet["dx"] * (dt / 16.0)
+        bullet["y"] += bullet["dy"] * (dt / 16.0)
+        
+        # Remove if out of bounds
+        if (bullet["x"] < 0 or bullet["x"] > ROOM_WIDTH or 
+            bullet["y"] < 0 or bullet["y"] > ROOM_HEIGHT):
+            bullets_to_remove.append(i)
+    
+    # Remove bullets
+    for i in sorted(bullets_to_remove, reverse=True):
+        bullets.pop(i)
+
+def draw_bullets(surface):
+    """Draw all active bullets."""
+    for bullet in bullets:
+        pygame.draw.circle(surface, (255, 255, 0), (int(bullet["x"]), int(bullet["y"])), 4)
+        pygame.draw.circle(surface, (255, 200, 0), (int(bullet["x"]), int(bullet["y"])), 2)
+
+def draw_weapon_hud(surface):
+    """Draw weapon ammo and reload status."""
+    if has_weapon:
+        ammo_text = font.render(f"Ammo: {ammo}/{max_ammo}", True, (255, 255, 255))
+        surface.blit(ammo_text, (10, 10))
+        
+        if is_reloading:
+            reload_text = font.render("RELOADING...", True, (255, 0, 0))
+            surface.blit(reload_text, (10, 40))
+        
+        # Weapon level indicator
+        weapon_text = small_font.render(f"Weapon Lvl: {weapon_level}", True, (200, 200, 255))
+        surface.blit(weapon_text, (10, ROOM_HEIGHT - 60))
+
 # ===== DRAWING FUNCTIONS =====
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
     """Draw objects using images only."""
@@ -472,8 +559,12 @@ def draw_hud(surface):
     health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
     surface.blit(health_text, (210, 35))
     
+    # Armor level
+    armor_text = small_font.render(f"Armor Level: {armor_level}", True, (200, 255, 200))
+    surface.blit(armor_text, (210, 65))
+    
     # Inventory
-    y = 80
+    y = 100
     for item, count in inventory.items():
         if count > 0:
             text = font.render(f"{item}: {count}", True, (255, 255, 255))
@@ -576,7 +667,7 @@ def draw_dialogue(surface):
     surface.blit(hint, (box.right - 180, box.bottom - 30))
 
 def draw_upgrade_shop(surface):
-    """Draw upgrade shop interface."""
+    """Draw improved upgrade shop interface."""
     if not upgrade_shop_visible:
         return
     
@@ -584,27 +675,80 @@ def draw_upgrade_shop(surface):
     overlay.fill((0, 0, 0, 220))
     surface.blit(overlay, (0, 0))
     
-    box = pygame.Rect(100, 100, 600, 400)
+    box = pygame.Rect(100, 80, 600, 500)
     pygame.draw.rect(surface, (40, 30, 30), box)
     pygame.draw.rect(surface, (255, 180, 0), box, 4)
     
     title = title_font.render("BLACKSMITH'S FORGE", True, (255, 180, 0))
-    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 120))
+    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 100))
+    
+    # Gold display
+    gold_text = font.render(f"Your Gold: {inventory['Gold']}", True, (255, 215, 0))
+    surface.blit(gold_text, (ROOM_WIDTH//2 - gold_text.get_width()//2, 150))
+    
+    # Current stats
+    stats_y = 190
+    current_stats = [
+        f"Weapon Level: {weapon_level}/5",
+        f"Armor Level: {armor_level}/5",
+        f"Health: {max_health}",
+        f"Bullet Damage: {20 + (weapon_level * 5)}"
+    ]
+    
+    for stat in current_stats:
+        stat_text = small_font.render(stat, True, (200, 200, 255))
+        surface.blit(stat_text, (ROOM_WIDTH//2 - stat_text.get_width()//2, stats_y))
+        stats_y += 25
     
     # Upgrade options
-    y = 200
+    y = 300
+    
+    # Weapon upgrade
     next_wpn = weapon_level + 1
     wpn_cost = upgrade_costs["weapon"].get(next_wpn - 1, 100) if next_wpn <= 5 else 0
     can_afford_wpn = inventory["Gold"] >= wpn_cost and weapon_level < 5
     
-    wpn_text = font.render(f"Upgrade Weapon to Level {next_wpn}", True, (255, 255, 255) if can_afford_wpn else (150, 150, 150))
-    cost_text = font.render(f"Cost: {wpn_cost} Gold", True, (255, 215, 0))
+    wpn_text = font.render(f"1. Upgrade Weapon to Level {next_wpn}", True, (255, 255, 255) if can_afford_wpn else (150, 150, 150))
+    cost_text = font.render(f"Cost: {wpn_cost} Gold", True, (255, 215, 0) if can_afford_wpn else (150, 150, 150))
+    bonus_text = small_font.render(f"+5 damage per level", True, (200, 200, 200))
     
     surface.blit(wpn_text, (150, y))
     surface.blit(cost_text, (450, y))
+    surface.blit(bonus_text, (150, y + 25))
     
-    hint = small_font.render("Press 1 to upgrade weapon, ESC to close", True, (200, 200, 200))
-    surface.blit(hint, (150, 350))
+    if weapon_level >= 5:
+        max_text = small_font.render("(MAX LEVEL)", True, (0, 255, 0))
+        surface.blit(max_text, (150, y + 45))
+    
+    # Armor upgrade
+    y += 80
+    next_arm = armor_level + 1
+    arm_cost = upgrade_costs["armor"].get(next_arm - 1, 95) if next_arm <= 5 else 0
+    can_afford_arm = inventory["Gold"] >= arm_cost and armor_level < 5
+    
+    arm_text = font.render(f"2. Upgrade Armor to Level {next_arm}", True, (255, 255, 255) if can_afford_arm else (150, 150, 150))
+    arm_cost_text = font.render(f"Cost: {arm_cost} Gold", True, (255, 215, 0) if can_afford_arm else (150, 150, 150))
+    arm_bonus_text = small_font.render(f"+20 max health per level", True, (200, 200, 200))
+    
+    surface.blit(arm_text, (150, y))
+    surface.blit(arm_cost_text, (450, y))
+    surface.blit(arm_bonus_text, (150, y + 25))
+    
+    if armor_level >= 5:
+        max_text = small_font.render("(MAX LEVEL)", True, (0, 255, 0))
+        surface.blit(max_text, (150, y + 45))
+    
+    # Instructions
+    y = box.bottom - 60
+    hints = [
+        "Press 1 to upgrade Weapon",
+        "Press 2 to upgrade Armor", 
+        "Press ESC or SPACE to close"
+    ]
+    
+    for i, hint in enumerate(hints):
+        hint_text = small_font.render(hint, True, (200, 200, 200))
+        surface.blit(hint_text, (150, y + i * 20))
 
 # ===== GAME LOGIC FUNCTIONS =====
 def collision_check(dx, dy):
@@ -790,7 +934,20 @@ while running:
                             quests["collect_herbs"]["active"] = True
                     else:
                         message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
-                elif event.key == pygame.K_ESCAPE:
+                
+                elif event.key == pygame.K_2 and armor_level < 5:
+                    next_level = armor_level + 1
+                    cost = upgrade_costs["armor"].get(next_level - 1, 95)
+                    if inventory["Gold"] >= cost:
+                        inventory["Gold"] -= cost
+                        armor_level = next_level
+                        max_health = 100 + (armor_level * 20)  # +20 health per armor level
+                        health = min(health, max_health)  # Cap current health to new max
+                        message, message_color, message_timer = f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0
+                    else:
+                        message, message_color, message_timer = "Not enough gold!", (255, 0, 0), 1.5
+                
+                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
                     upgrade_shop_visible = False
             
             elif event.key == pygame.K_e:
@@ -809,6 +966,23 @@ while running:
             
             elif event.key == pygame.K_f:
                 handle_interaction()
+            
+            # Shooting with SPACE key
+            elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active:
+                if shoot_bullet():
+                    message, message_color, message_timer = "Pew!", (255, 255, 0), 0.5
+                elif not has_weapon:
+                    message, message_color, message_timer = "No weapon equipped!", (255, 0, 0), 1.0
+                elif is_reloading:
+                    message, message_color, message_timer = "Reloading...", (255, 200, 0), 0.5
+                elif ammo == 0:
+                    message, message_color, message_timer = "Out of ammo! Press R to reload", (255, 0, 0), 1.0
+            
+            # Reload with R key
+            elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
+                is_reloading = True
+                reload_time = 2.0
+                message, message_color, message_timer = "Reloading...", (255, 200, 0), 1.0
     
     # ===== HOME SCREEN =====
     if on_home:
@@ -817,12 +991,28 @@ while running:
         screen.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 200))
         prompt = font.render("Press SPACE to Begin", True, (255, 255, 255))
         screen.blit(prompt, (ROOM_WIDTH//2 - prompt.get_width()//2, 400))
+        
+        # Show controls
+        controls = [
+            "WASD - Move",
+            "SPACE - Shoot", 
+            "R - Reload",
+            "F - Interact",
+            "E - Inventory",
+            "H - Use Health Potion"
+        ]
+        y = 500
+        for ctrl in controls:
+            ctrl_text = small_font.render(ctrl, True, (200, 200, 200))
+            screen.blit(ctrl_text, (ROOM_WIDTH//2 - ctrl_text.get_width()//2, y))
+            y += 25
+            
         pygame.display.flip()
         continue
     
     # ===== GAMEPLAY =====
     
-        # Movement
+    # Movement
     mv_x = (keys_pressed[pygame.K_d] or keys_pressed[pygame.K_RIGHT]) - (keys_pressed[pygame.K_a] or keys_pressed[pygame.K_LEFT])
     mv_y = (keys_pressed[pygame.K_s] or keys_pressed[pygame.K_DOWN]) - (keys_pressed[pygame.K_w] or keys_pressed[pygame.K_UP])
     
@@ -845,11 +1035,27 @@ while running:
     collision_check(dx, dy)
     room_transition()
     
+    # Update weapon systems
+    if shoot_cooldown > 0:
+        shoot_cooldown = max(0, shoot_cooldown - dt / 1000.0)
+    
+    if is_reloading:
+        reload_time -= dt / 1000.0
+        if reload_time <= 0:
+            ammo = max_ammo
+            is_reloading = False
+            reload_time = 0.0
+    
+    update_bullets(dt)
+    
     # Pickup items
     pickup_items()
     
     # Draw player
     draw_player(screen, player)
+    
+    # Draw bullets
+    draw_bullets(screen)
         
     # Draw UI
     draw_hud(screen) 
@@ -858,6 +1064,7 @@ while running:
     draw_message(screen)
     draw_dialogue(screen)
     draw_upgrade_shop(screen)
+    draw_weapon_hud(screen)
     
     # Show interaction hint
     near_object = False
