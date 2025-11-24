@@ -648,9 +648,10 @@ def draw_minimap(surface, level, row, col):
     for r in range(3):
         for c in range(3):
             x = map_x + c * cell_size
-            y = map_y + r * cell_size
+            y = map_y + (2 - r) * cell_size  # Invert the row coordinate
             rect = pygame.Rect(x, y, cell_size - 2, cell_size - 2)
             
+            # Check if this is the current room (note: r and row use same coordinate system)
             if r == row and c == col:
                 pygame.draw.rect(surface, (255, 255, 0), rect)
             else:
