@@ -196,13 +196,13 @@ def load_object_image(obj_type, width, height):
 def load_item_image(item_type):
     """Load items with larger size for keys, gold, and herbs."""
     if item_type == "key":
-        return load_image(f"items/{item_type}.png", 35, 35)  # Larger key
+        return load_image(f"items/{item_type}.png", 45, 45)  # Larger key
     elif item_type == "gold":
-        return load_image(f"items/{item_type}.png", 35, 35)  # Larger gold
+        return load_image(f"items/{item_type}.png", 45, 45)  # Larger gold
     elif item_type == "herb":
-        return load_image(f"items/{item_type}.png", 35, 35)  # Larger herb
+        return load_image(f"items/{item_type}.png", 45, 45)  # Larger herb
     elif item_type == "timeshard":
-        return load_image(f"items/{item_type}.png", 40, 40)  # Time shard
+        return load_image(f"items/{item_type}.png", 50, 50)  # Larger time shard
     return load_image(f"items/{item_type}.png", 25, 25)
 
 def get_npc_size(npc_type):
@@ -210,7 +210,7 @@ def get_npc_size(npc_type):
     if npc_type == "goblin":
         return (50, 70)
     elif npc_type == "boss1":
-        return (80, 100)  # Boss is larger
+        return (100, 120)  # Larger boss
     elif npc_type == "herbcollector":
         return (50, 70)  # Larger herb collector
     return (35, 55)
@@ -221,7 +221,7 @@ def load_npc_image(npc_type):
 
 def load_axe_image():
     """Load the boss axe image."""
-    return load_image("npcs/axe.png", 60, 30)
+    return load_image("npcs/axe.png", 80, 40)  # Larger axe
 
 # ===== GAME STATE =====
 health = 100
@@ -272,7 +272,9 @@ boss_attack_cooldown = 0
 boss_axe = None
 boss_axe_angle = 0
 boss_axe_swinging = False
-boss_axe_damage = 30
+boss_axe_damage = 40  # Increased boss damage
+boss_defeated = False
+boss_drop_collected = False
 
 # ===== UI FLAGS =====
 game_state = "main_menu"  # "main_menu", "how_to_play", "about", "playing"
@@ -468,7 +470,6 @@ room_data = {
         "items": [
             {"type": "gold", "x": 100, "y": 150, "id": "gold_0_2_0_1"},
             {"type": "gold", "x": 700, "y": 150, "id": "gold_0_2_0_2"},
-            {"type": "timeshard", "x": 400, "y": 200, "id": "timeshard_0_2_0_1"},  # Time shard in Throne Room
         ]
     },
     
@@ -517,22 +518,24 @@ _init_goblins()
 # ===== BOSS FUNCTIONS =====
 def init_boss():
     """Initialize the boss in the throne room."""
-    global boss, boss_health, boss_max_health, boss_attack_cooldown, boss_axe, boss_axe_angle
-    boss_rect = pygame.Rect(350, 300, 80, 100)
+    global boss, boss_health, boss_max_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_defeated, boss_drop_collected
+    boss_rect = pygame.Rect(350, 300, 100, 120)
     boss = {
         "rect": boss_rect,
         "alive": True,
         "last_direction": "right"
     }
-    boss_max_health = max_health * 2  # Double player's health
+    boss_max_health = max_health * 3  # Triple player's health
     boss_health = boss_max_health
     boss_attack_cooldown = 0
     boss_axe = {"x": 0, "y": 0, "angle": 0, "swinging": False}
     boss_axe_angle = 0
+    boss_defeated = False
+    boss_drop_collected = False
 
 def update_boss(dt):
     """Update boss behavior and attacks."""
-    global boss_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_axe_swinging, health
+    global boss_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_axe_swinging, health, boss_defeated
     
     if not boss or not boss["alive"]:
         return
@@ -544,7 +547,7 @@ def update_boss(dt):
         boss_attack_cooldown -= dt_sec
     
     # Boss movement - smart chasing
-    speed = 80  # pixels per second
+    speed = 70  # pixels per second
     dx = player.centerx - boss["rect"].centerx
     dy = player.centery - boss["rect"].centery
     dist = math.hypot(dx, dy)
@@ -565,14 +568,14 @@ def update_boss(dt):
         boss["rect"].y = max(100, min(ROOM_HEIGHT - boss["rect"].height - 100, boss["rect"].y))
     
     # Attack if close enough and cooldown is ready
-    if dist < 150 and boss_attack_cooldown <= 0:
+    if dist < 180 and boss_attack_cooldown <= 0:
         boss_axe_swinging = True
         boss_axe_angle = 0
-        boss_attack_cooldown = 2.0  # 2 second cooldown
+        boss_attack_cooldown = 2.5  # 2.5 second cooldown
     
     # Handle axe swinging
     if boss_axe_swinging:
-        boss_axe_angle += 10  # Swing speed
+        boss_axe_angle += 8  # Slightly slower swing speed
         if boss_axe_angle >= 180:
             boss_axe_swinging = False
             boss_axe_angle = 0
@@ -593,7 +596,7 @@ def calculate_axe_rect():
     center_y = boss["rect"].centery
     
     # Calculate axe position based on swing angle and boss direction
-    radius = 70
+    radius = 90  # Larger radius for bigger boss
     angle_rad = math.radians(boss_axe_angle)
     
     if boss["last_direction"] == "right":
@@ -603,7 +606,7 @@ def calculate_axe_rect():
         axe_x = center_x - radius * math.cos(angle_rad)
         axe_y = center_y + radius * math.sin(angle_rad)
     
-    return pygame.Rect(axe_x - 30, axe_y - 15, 60, 30)
+    return pygame.Rect(axe_x - 40, axe_y - 20, 80, 40)
 
 def draw_boss(surface):
     """Draw the boss and his axe."""
@@ -627,20 +630,20 @@ def draw_boss(surface):
         surface.blit(rotated_axe, (axe_rect.x, axe_rect.y))
     
     # Draw boss health bar
-    health_width = 200
+    health_width = 300
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = 20
     
-    pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 20))
-    pygame.draw.rect(surface, (255, 0, 0), (health_x, health_y, health_width * (boss_health / boss_max_health), 20))
-    pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 20), 2)
+    pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 25))
+    pygame.draw.rect(surface, (255, 0, 0), (health_x, health_y, health_width * (boss_health / boss_max_health), 25))
+    pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 25), 2)
     
     health_text = font.render(f"Goblin King: {int(boss_health)}/{boss_max_health}", True, (255, 255, 255))
-    surface.blit(health_text, (health_x + 5, health_y + 2))
+    surface.blit(health_text, (health_x + 5, health_y + 3))
 
 def check_boss_hit():
     """Check if bullets hit the boss."""
-    global boss_health, bullets
+    global boss_health, bullets, boss_defeated
     
     if not boss or not boss["alive"]:
         return
@@ -654,14 +657,37 @@ def check_boss_hit():
             
             if boss_health <= 0:
                 boss["alive"] = False
-                inventory["Time Shards"] += 1
-                quests["defeat_goblin_king"]["complete"] = True
-                quests["find_shard_1"]["complete"] = True
-                set_message("Goblin King defeated! You found a Time Shard!", (0, 255, 0), 3.0)
+                boss_defeated = True
+                set_message("Goblin King defeated! Collect the drops!", (0, 255, 0), 3.0)
     
     # Remove hit bullets
     for i in sorted(bullets_to_remove, reverse=True):
         bullets.pop(i)
+
+def draw_boss_drops(surface):
+    """Draw the boss drops after defeat."""
+    if boss_defeated and not boss_drop_collected:
+        # Draw time shard
+        timeshard_img = load_item_image("timeshard")
+        surface.blit(timeshard_img, (boss["rect"].centerx - 25, boss["rect"].centery - 25))
+        
+        # Draw key
+        key_img = load_item_image("key")
+        surface.blit(key_img, (boss["rect"].centerx + 15, boss["rect"].centery - 25))
+
+def collect_boss_drops():
+    """Collect boss drops when player walks over them."""
+    global boss_drop_collected, inventory, quests
+    
+    if boss_defeated and not boss_drop_collected:
+        drop_rect = pygame.Rect(boss["rect"].centerx - 40, boss["rect"].centery - 40, 80, 80)
+        if player.colliderect(drop_rect):
+            inventory["Time Shards"] += 1
+            inventory["Keys"] += 1
+            boss_drop_collected = True
+            quests["defeat_goblin_king"]["complete"] = True
+            quests["find_shard_1"]["complete"] = True
+            set_message("Collected Time Shard and Key from Goblin King!", (0, 255, 0), 3.0)
 
 # ===== WEAPON FUNCTIONS =====
 def shoot_bullet():
@@ -897,9 +923,9 @@ def draw_item(surface, x, y, item_type, item_id):
     
     # Create appropriate sized collision rectangle
     if item_type in ["key", "gold", "herb"]:
-        rect = pygame.Rect(x, y, 35, 35)  # Larger collision for key, gold, and herb
+        rect = pygame.Rect(x, y, 45, 45)  # Larger collision for key, gold, and herb
     elif item_type == "timeshard":
-        rect = pygame.Rect(x, y, 40, 40)  # Larger collision for time shard
+        rect = pygame.Rect(x, y, 50, 50)  # Larger collision for time shard
     else:
         rect = pygame.Rect(x, y, 25, 25)
     
@@ -976,6 +1002,10 @@ def draw_room(surface, level, row, col):
     # Draw boss if in throne room
     if room_key == (0, 2, 0) and boss and boss["alive"]:
         draw_boss(surface)
+    
+    # Draw boss drops if defeated
+    if room_key == (0, 2, 0) and boss_defeated and not boss_drop_collected:
+        draw_boss_drops(surface)
 
     # Draw items
     for item in room_info.get("items", []):
@@ -990,18 +1020,21 @@ def draw_hud(surface):
     overlay.fill((0, 0, 0, 200))
     surface.blit(overlay, (0, 0))
     
-    # Health bar
+    # Health bar at bottom middle
     health_width = 400
-    pygame.draw.rect(surface, (100, 0, 0), (200, 30, health_width, 30))
-    pygame.draw.rect(surface, (0, 255, 0), (200, 30, health_width * (health / max_health), 30))
-    pygame.draw.rect(surface, (255, 255, 255), (200, 30, health_width, 30), 2)
+    health_x = ROOM_WIDTH // 2 - health_width // 2
+    health_y = ROOM_HEIGHT - 50
+    
+    pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 30))
+    pygame.draw.rect(surface, (0, 255, 0), (health_x, health_y, health_width * (health / max_health), 30))
+    pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 30), 2)
     
     health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
-    surface.blit(health_text, (210, 35))
+    surface.blit(health_text, (health_x + 10, health_y + 5))
     
     # Armor level
     armor_text = small_font.render(f"Armor Level: {armor_level}", True, (200, 255, 200))
-    surface.blit(armor_text, (210, 65))
+    surface.blit(armor_text, (health_x + health_width - 150, health_y + 5))
     
     # Inventory
     y = 100
@@ -1522,9 +1555,9 @@ def pickup_items():
         if item["type"] in ["key", "timeshard"]:
             # Create appropriate sized collision rectangle
             if item["type"] == "key":
-                item_rect = pygame.Rect(item["x"], item["y"], 35, 35)
+                item_rect = pygame.Rect(item["x"], item["y"], 45, 45)
             elif item["type"] == "timeshard":
-                item_rect = pygame.Rect(item["x"], item["y"], 40, 40)
+                item_rect = pygame.Rect(item["x"], item["y"], 50, 50)
             else:
                 item_rect = pygame.Rect(item["x"], item["y"], 25, 25)
                 
@@ -1865,6 +1898,10 @@ while running:
         
         # Handle damage zones
         handle_damage_zones(dt)
+        
+        # Collect boss drops
+        if tuple(current_room) == (0, 2, 0) and boss_defeated and not boss_drop_collected:
+            collect_boss_drops()
         
         # Update weapon systems
         if shoot_cooldown > 0:
