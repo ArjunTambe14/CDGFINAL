@@ -192,14 +192,6 @@ health = 100
 max_health = 100
 weapon_level = 1
 armor_level = 0
-upgrade_costs = {
-    "weapon": {
-        1: 100,
-        2: 150,
-        3: 225,
-        4: 325,
-    }
-}
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
