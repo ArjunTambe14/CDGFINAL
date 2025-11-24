@@ -210,11 +210,11 @@ def get_npc_size(npc_type):
     if npc_type == "goblin":
         return (50, 70)
     elif npc_type == "boss1":
-        return (100, 120)  # Larger boss
+        return (100, 120) 
     elif npc_type == "herbcollector":
-        return (50, 70)  # Larger herb collector
+        return (70, 90)  
     elif npc_type == "knight":
-        return (50, 70)  # Knight size
+        return (50, 70) 
     return (35, 55)
 
 def load_npc_image(npc_type):
@@ -223,7 +223,7 @@ def load_npc_image(npc_type):
 
 def load_axe_image():
     """Load the boss axe image."""
-    return load_image("npcs/axe.png", 80, 40)  # Larger axe
+    return load_image("npcs/axe.png", 90, 50) 
 
 # ===== GAME STATE =====
 health = 100
@@ -231,7 +231,7 @@ max_health = 100
 weapon_level = 1
 armor_level = 0
 GOBLIN_CONTACT_DAMAGE = 10
-goblin_contact_cooldown = 0.0  # seconds of i-frames after a goblin hit
+goblin_contact_cooldown = 0.0  
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -261,7 +261,7 @@ collected_keys = set()
 collected_timeshards = set()
 
 # ===== SAFE PUZZLE SYSTEM =====
-safe_code = "4231"  # The code the herb collector gives
+safe_code = "4231" 
 safe_input = ""
 safe_unlocked = False
 safe_visible = False
@@ -275,7 +275,6 @@ maze_cell_size = 40
 maze_width = 11
 maze_height = 11
 
-# Maze layout: 0 = path, 1 = wall
 maze_layout = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
@@ -303,7 +302,7 @@ boss_defeated = False
 boss_drop_collected = False
 
 # ===== UI FLAGS =====
-game_state = "main_menu"  # "main_menu", "how_to_play", "about", "playing"
+game_state = "main_menu" 
 on_home = True
 hud_visible = False
 map_visible = False
@@ -314,7 +313,7 @@ dialogue_index = 0
 upgrade_shop_visible = False
 in_combat = False
 combat_enemies = []
-give_herbs_active = False  # New flag for giving herbs to NPC
+give_herbs_active = False  
 
 # ===== MESSAGES =====
 message = ""
@@ -342,7 +341,12 @@ npc_dialogues = {
         "Knight Aelric: I dropped my key when they captured me - you should find it nearby.",
         "Quest Updated: Defeat the Goblin King"
     ],
-    # ... rest of dialogues stay the same
+    (0, 2, 1, "herbcollector_with_herbs"): [
+        "Herb Collector: Thank you for the herbs!",
+        "Herb Collector: As promised, here's the safe code: 4231",
+        "Herb Collector: Use it to open the safe in this room.",
+        "Quest Updated: Safe code received!"
+    ],
 }
 # ===== GLOBAL OBJECT LISTS =====
 colliders = []
@@ -354,13 +358,11 @@ interactive_objects = []
 goblin_rooms = {}
 
 GOBLIN_WAVES = {
-    # Forest Path spawns three waves: 2, then 3, then 3 chasing goblins.
     (0, 0, 2): [
         [(350, 350), (200, 420)],  # wave 1: 2 goblins
         [(450, 260), (280, 520), (600, 420)],  # wave 2: 3 goblins
         [(180, 180), (520, 180), (420, 620)],  # wave 3: 3 goblins
     ],
-    # Goblin Camp spawns 5 goblins
     (0, 1, 0): [
         [(100, 100), (200, 150), (300, 200), (400, 150), (500, 100)],  # 5 goblins
     ],
@@ -369,12 +371,11 @@ GOBLIN_WAVES = {
 def _init_goblin_rooms():
     """Prepare goblin wave state for configured rooms."""
     for room_key, waves in GOBLIN_WAVES.items():
-        # Each room tracks active wave, pending respawn timer, and live enemies.
         goblin_rooms[room_key] = {
             "waves": waves,
             "wave_index": 0,
             "active": [],
-            "respawn": 0.0,  # seconds until next wave
+            "respawn": 0.0,  
         }
 
 _init_goblin_rooms()
@@ -444,15 +445,14 @@ room_data = {
         {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
     ],
     "interactive": [
-        {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  # Moved to lower left
+        {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  
     ],
     "npcs": [
-        {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  # Moved with cage
+        {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  
     ],
     "items": [
         {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
         {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
-        # Key will be dropped when knight is rescued
     ]
 },
     
@@ -487,7 +487,6 @@ room_data = {
     (0, 2, 0): {
         "name": "Throne Room",
         "objects": [
-            # Removed rocks from throne room
         ],
         "interactive": [],
         "npcs": [
@@ -502,7 +501,6 @@ room_data = {
     (0, 2, 1): {
         "name": "Secret Library",
         "objects": [
-            # Removed rocks from library
         ],
         "interactive": [
             {"type": "safe", "x": 350, "y": 300, "width": 100, "height": 100},
@@ -551,7 +549,7 @@ def init_boss():
         "alive": True,
         "last_direction": "right"
     }
-    boss_max_health = max_health * 3  # Triple player's health
+    boss_max_health = max_health * 3 
     boss_health = boss_max_health
     boss_attack_cooldown = 0
     boss_axe = {"x": 0, "y": 0, "angle": 0, "swinging": False}
@@ -568,28 +566,26 @@ def update_boss(dt):
     
     dt_sec = dt / 1000.0
     
-    # Update attack cooldown
     if boss_attack_cooldown > 0:
         boss_attack_cooldown -= dt_sec
     
-    # Boss movement - smart chasing
-    speed = 70  # pixels per second
+    # Boss movement 
+    speed = 70  
     dx = player.centerx - boss["rect"].centerx
     dy = player.centery - boss["rect"].centery
     dist = math.hypot(dx, dy)
     
-    # Update boss direction
     if dx > 0:
         boss["last_direction"] = "right"
     else:
         boss["last_direction"] = "left"
     
-    if dist > 0 and dist < 400:  # Chase if player is within 400 pixels
+    if dist > 0 and dist < 400:  
         step = speed * dt_sec
         boss["rect"].x += (dx / dist) * step
         boss["rect"].y += (dy / dist) * step
         
-        # Keep boss in throne room boundaries
+        # throne room boundaries
         boss["rect"].x = max(100, min(ROOM_WIDTH - boss["rect"].width - 100, boss["rect"].x))
         boss["rect"].y = max(100, min(ROOM_HEIGHT - boss["rect"].height - 100, boss["rect"].y))
     
@@ -597,11 +593,11 @@ def update_boss(dt):
     if dist < 180 and boss_attack_cooldown <= 0:
         boss_axe_swinging = True
         boss_axe_angle = 0
-        boss_attack_cooldown = 2.5  # 2.5 second cooldown
+        boss_attack_cooldown = 2.5  
     
     # Handle axe swinging
     if boss_axe_swinging:
-        boss_axe_angle += 8  # Slightly slower swing speed
+        boss_axe_angle += 8  
         if boss_axe_angle >= 180:
             boss_axe_swinging = False
             boss_axe_angle = 0
@@ -612,8 +608,8 @@ def update_boss(dt):
                 damage = boss_axe_damage - (armor_level * 5)  # Armor reduces damage
                 health = max(0, health - damage)
                 set_message(f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
-
-def calculate_axe_rect():
+ 
+def calculate_axe_rect(): # asked ai to help us with this function
     """Calculate the current position of the boss's axe."""
     if not boss:
         return pygame.Rect(0, 0, 0, 0)
@@ -621,8 +617,7 @@ def calculate_axe_rect():
     center_x = boss["rect"].centerx
     center_y = boss["rect"].centery
     
-    # Calculate axe position based on swing angle and boss direction
-    radius = 90  # Larger radius for bigger boss
+    radius = 90  
     angle_rad = math.radians(boss_axe_angle)
     
     if boss["last_direction"] == "right":
@@ -639,23 +634,19 @@ def draw_boss(surface):
     if not boss or not boss["alive"]:
         return
     
-    # Draw boss
     img = load_npc_image("boss1")
     surface.blit(img, (boss["rect"].x, boss["rect"].y))
     
-    # Draw axe if swinging
     if boss_axe_swinging:
         axe_rect = calculate_axe_rect()
         axe_img = load_axe_image()
         
-        # Rotate axe based on swing angle
         rotated_axe = pygame.transform.rotate(axe_img, -boss_axe_angle)
         if boss["last_direction"] == "left":
             rotated_axe = pygame.transform.flip(rotated_axe, True, False)
         
         surface.blit(rotated_axe, (axe_rect.x, axe_rect.y))
     
-    # Draw boss health bar
     health_width = 300
     health_x = ROOM_WIDTH // 2 - health_width // 2
     health_y = 20
@@ -724,7 +715,6 @@ def shoot_bullet():
         return False
         
     if not is_reloading and ammo > 0 and shoot_cooldown <= 0:
-        # Calculate direction towards mouse
         dx = mouse_x - player.centerx
         dy = mouse_y - player.centery
         dist = math.sqrt(dx*dx + dy*dy)
