@@ -13,7 +13,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = True
+DEV_MODE = False
 
 # ===== SETUP =====
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
@@ -30,24 +30,63 @@ POINTER_OFFSET_X = -20
 # ===== DAMAGE ZONES =====
 damage_zones = []
 damage_timer = 0.0
-DAMAGE_INTERVAL = 1.0  # Damage every second
+DAMAGE_INTERVAL = 1.0  
 
 # ===== PLAYER SETUP =====
-player = pygame.Rect(100, ROOM_HEIGHT - 150, 40, 50)
+player = pygame.Rect(400, 400, 40, 50)  
 player_speed = 7
 current_room = [0, 0, 0]
 previous_room = tuple(current_room)
-player_direction = "right"  # Start facing right
+player_direction = "right"  
 
 # ===== WEAPON SYSTEM =====
 bullets = []
-ammo = 30
+ammo = 0  # Start with 0 ammo
 max_ammo = 30
 reload_time = 0.0
 is_reloading = False
 player_angle = 0.0
 shoot_cooldown = 0.0
-has_weapon = True  # Player starts with a weapon
+has_weapon = False  # Start without weapon
+
+# ===== BLACKSMITH SHOP ITEMS =====
+blacksmith_items = {
+    "weapon": {
+        "name": "Basic Firearm",
+        "description": "",
+        "cost": 20,
+        "purchased": False,
+        "type": "weapon"
+    },
+    "ammo_pack": {
+        "name": "Ammo Pack",
+        "description": "",
+        "cost": 10,
+        "purchased": False,
+        "type": "consumable"
+    },
+    "health_potion": {
+        "name": "Health Potion", 
+        "description": "",
+        "cost": 15,
+        "purchased": False,
+        "type": "consumable"
+    },
+    "armor_upgrade": {
+        "name": "Armor Upgrade",
+        "description": "",
+        "cost": 25,
+        "purchased": False,
+        "type": "upgrade"
+    },
+    "weapon_upgrade": {
+        "name": "Weapon Upgrade", 
+        "description": "",
+        "cost": 30,
+        "purchased": False,
+        "type": "upgrade"
+    }
+}
 
 # ===== UPGRADE SYSTEM =====
 upgrade_costs = {
@@ -246,13 +285,16 @@ inventory = {
 # ===== QUEST SYSTEM =====
 quests = {
     "talk_to_elder": {"active": True, "complete": False, "description": "Talk to Elder Rowan"},
-    "upgrade_sword": {"active": False, "complete": False, "description": "Visit the Blacksmith"},
+    "buy_weapon": {"active": False, "complete": False, "description": "Buy a weapon from the Blacksmith (20 Gold)"},
+    "upgrade_sword": {"active": False, "complete": False, "description": "Upgrade your weapon at the Blacksmith"},
+    "upgrade_armor": {"active": False, "complete": False, "description": "Upgrade your armor at the Blacksmith"},
     "collect_herbs": {"active": False, "complete": False, "description": "Collect 3 Herbs from Forest"},
     "rescue_knight": {"active": False, "complete": False, "description": "Rescue Knight Aelric"},
     "solve_drawbridge": {"active": False, "complete": False, "description": "Solve Drawbridge Puzzle"},
     "defeat_goblin_king": {"active": False, "complete": False, "description": "Defeat the Goblin King"},
     "find_shard_1": {"active": False, "complete": False, "description": "Find First Time Shard"},
 }
+
 
 # ===== COLLECTED ITEMS TRACKING =====
 collected_gold = set()
@@ -329,8 +371,11 @@ npc_dialogues = {
     (0, 0, 0, "elder"): [
         "Elder Rowan: Welcome, brave Arin!",
         "Elder Rowan: The Time Shards have been scattered across eras.",
-        "Elder Rowan: Start by visiting the Blacksmith for better gear.",
-        "Quest Updated: Visit the Blacksmith"
+        "Elder Rowan: You'll need protection for your journey.",
+        "Elder Rowan: Visit the Blacksmith to the east - he can sell you a weapon.",
+        "Elder Rowan: A basic firearm costs 20 gold pieces.",
+        "Elder Rowan: He also offers armor and weapon upgrades for your journey.",
+        "Quest Updated: Visit the Blacksmith to buy a weapon"
     ],
     (0, 1, 0, "knight"): [  # Knight when imprisoned
         "Knight Aelric: Please, help me! I'm trapped in this cage!",
@@ -396,7 +441,7 @@ room_data = {
         "objects": [
              {"type": "invisible", "x": 110, "y": 100, "width": 140, "height": 600},
              {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
-              {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
+             {"type": "invisible", "x": 290, "y": 100, "width": 240, "height": 170},
         ],
         "interactive": [],
         "npcs": [
@@ -810,6 +855,7 @@ def shoot_bullet():
     global ammo, shoot_cooldown, is_reloading
     
     if not has_weapon:
+        set_message("You need a weapon! Visit the blacksmith.", (255, 200, 0), 2.0)
         return False
         
     if not is_reloading and ammo > 0 and shoot_cooldown <= 0:
@@ -833,6 +879,11 @@ def shoot_bullet():
             shoot_cooldown = 0.2
                 
             return True
+    
+    # Handle out of ammo case
+    if ammo == 0 and has_weapon and not is_reloading:
+        set_message("Out of ammo! Buy more from the blacksmith.", (255, 200, 0), 1.5)
+    
     return False
 
 def update_bullets(dt):
@@ -894,12 +945,25 @@ def draw_weapon_hud(surface):
             reload_text = font.render("RELOADING...", True, (255, 0, 0))
             surface.blit(reload_text, (10, 40))
         elif ammo == 0:
-            reload_hint = font.render("Press R to reload", True, (255, 200, 0))
+            reload_hint = font.render("Buy ammo from Blacksmith", True, (255, 200, 0))
             surface.blit(reload_hint, (10, 40))
         
-        # Weapon level indicator
+        # Weapon and armor level indicators
         weapon_text = small_font.render(f"Weapon Lvl: {weapon_level}", True, (200, 200, 255))
-        surface.blit(weapon_text, (10, ROOM_HEIGHT - 60))
+        armor_text = small_font.render(f"Armor Lvl: {armor_level}", True, (200, 255, 200))
+        surface.blit(weapon_text, (10, ROOM_HEIGHT - 80))
+        surface.blit(armor_text, (10, ROOM_HEIGHT - 60))
+    else:
+        # Show message when no weapon
+        no_weapon_text = font.render("No Weapon - Visit Blacksmith", True, (255, 100, 100))
+        surface.blit(no_weapon_text, (10, 10))
+        hint_text = small_font.render("", True, (200, 200, 200))
+        surface.blit(hint_text, (10, 40))
+        
+        # Still show armor level if any
+        if armor_level > 0:
+            armor_text = small_font.render(f"Armor Lvl: {armor_level}", True, (200, 255, 200))
+            surface.blit(armor_text, (10, ROOM_HEIGHT - 60))
 
 # ===== PLAYER DEATH AND RESPAWN =====
 def respawn_player():
@@ -918,7 +982,7 @@ def respawn_player():
     player.x = 100
     player.y = ROOM_HEIGHT - 150
     current_room = [0, 0, 0]  # Village center
-    ammo = max_ammo
+    ammo = 0 if not has_weapon else max_ammo
     is_reloading = False
     reload_time = 0.0
     
@@ -932,7 +996,7 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         rect = pygame.Rect(x, y, width, height)
         colliders.append(rect)
         
-        # Draw invisible barriers in development mode
+        # Draw invisible barriers in development mode only
         if DEV_MODE:
             # Create a semi-transparent red rectangle for visibility
             debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
@@ -952,11 +1016,16 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         rect = pygame.Rect(x, y, width, height)
         damage_zones.append(rect)
         
-        # Draw damage zones (always visible since they affect gameplay)
-        debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-        debug_surface.fill((255, 100, 0, 60))  # Semi-transparent orange
-        surface.blit(debug_surface, (x, y))
-        pygame.draw.rect(surface, (255, 100, 0), (x, y, width, height), 2)
+        # Draw damage zones in development mode only
+        if DEV_MODE:
+            debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            debug_surface.fill((255, 100, 0, 60))  # Semi-transparent orange
+            surface.blit(debug_surface, (x, y))
+            pygame.draw.rect(surface, (255, 100, 0), (x, y, width, height), 2)
+            # Add label
+            label_font = pygame.font.SysFont(None, 20)
+            label = label_font.render("DAMAGE", True, (255, 255, 255))
+            surface.blit(label, (x + 5, y + 5))
         
         return rect
         
@@ -1307,8 +1376,8 @@ def draw_dialogue(surface):
     hint = small_font.render("Press SPACE to continue...", True, (200, 200, 200))
     surface.blit(hint, (box.right - 180, box.bottom - 30))
 
-def draw_upgrade_shop(surface):
-    """Draw improved upgrade shop interface."""
+def draw_blacksmith_shop(surface):
+    """Draw the improved blacksmith shop interface."""
     if not upgrade_shop_visible:
         return
     
@@ -1316,80 +1385,206 @@ def draw_upgrade_shop(surface):
     overlay.fill((0, 0, 0, 220))
     surface.blit(overlay, (0, 0))
     
-    box = pygame.Rect(100, 80, 600, 500)
-    pygame.draw.rect(surface, (40, 30, 30), box)
-    pygame.draw.rect(surface, (255, 180, 0), box, 4)
+    # Main shop window
+    shop_rect = pygame.Rect(50, 50, ROOM_WIDTH - 100, ROOM_HEIGHT - 100)
+    pygame.draw.rect(surface, (40, 30, 20), shop_rect)
+    pygame.draw.rect(surface, (180, 120, 50), shop_rect, 4)
     
-    title = title_font.render("BLACKSMITH'S FORGE", True, (255, 180, 0))
-    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 100))
+    # Title with decorative elements
+    title_bg = pygame.Rect(shop_rect.x, shop_rect.y - 10, shop_rect.width, 70)
+    pygame.draw.rect(surface, (60, 40, 20), title_bg)
+    pygame.draw.rect(surface, (220, 180, 80), title_bg, 3)
+    
+    title = title_font.render("BLACKSMITH'S FORGE", True, (255, 200, 100))
+    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, shop_rect.y + 10))
     
     # Gold display
+    gold_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 80, shop_rect.width - 40, 40)
+    pygame.draw.rect(surface, (30, 30, 40), gold_rect)
+    pygame.draw.rect(surface, (255, 215, 0), gold_rect, 2)
+    
     gold_text = font.render(f"Your Gold: {inventory['Gold']}", True, (255, 215, 0))
-    surface.blit(gold_text, (ROOM_WIDTH//2 - gold_text.get_width()//2, 150))
+    surface.blit(gold_text, (gold_rect.centerx - gold_text.get_width()//2, gold_rect.centery - gold_text.get_height()//2))
     
-    # Current stats
-    stats_y = 190
-    current_stats = [
-        f"Weapon Level: {weapon_level}/5",
-        f"Armor Level: {armor_level}/5",
-        f"Health: {max_health}",
-        f"Bullet Damage: {20 + (weapon_level * 5)}"
+    # Player stats panel
+    stats_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 130, shop_rect.width - 40, 60)
+    pygame.draw.rect(surface, (30, 30, 40), stats_rect)
+    pygame.draw.rect(surface, (100, 150, 200), stats_rect, 2)
+    
+    stats_lines = [
+        f"Weapon: {'Equipped' if has_weapon else 'None'} (Lvl {weapon_level}) | Damage: {20 + (weapon_level * 5)}",
+        f"Armor: Lvl {armor_level} | Health: {max_health} | Ammo: {ammo}/{max_ammo}"
     ]
     
-    for stat in current_stats:
-        stat_text = small_font.render(stat, True, (200, 200, 255))
-        surface.blit(stat_text, (ROOM_WIDTH//2 - stat_text.get_width()//2, stats_y))
-        stats_y += 25
+    for i, line in enumerate(stats_lines):
+        stat_text = small_font.render(line, True, (200, 220, 255))
+        surface.blit(stat_text, (stats_rect.x + 10, stats_rect.y + 10 + i * 20))
     
-    # Upgrade options
-    y = 300
+    # Shop items area
+    items_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 210, shop_rect.width - 40, shop_rect.height - 280)
+    pygame.draw.rect(surface, (50, 40, 30), items_rect)
+    pygame.draw.rect(surface, (180, 150, 100), items_rect, 2)
     
-    # Weapon upgrade
-    next_wpn = weapon_level + 1
-    wpn_cost = upgrade_costs["weapon"].get(next_wpn - 1, 100) if next_wpn <= 5 else 0
-    can_afford_wpn = inventory["Gold"] >= wpn_cost and weapon_level < 5
+    # Section headers
+    basic_header = font.render("BASIC ITEMS:", True, (255, 200, 100))
+    upgrade_header = font.render("UPGRADES:", True, (255, 200, 100))
+    surface.blit(basic_header, (items_rect.x + 10, items_rect.y + 10))
+    surface.blit(upgrade_header, (items_rect.x + items_rect.width//2 + 10, items_rect.y + 10))
     
-    wpn_text = font.render(f"1. Upgrade Weapon to Level {next_wpn}", True, (255, 255, 255) if can_afford_wpn else (150, 150, 150))
-    cost_text = font.render(f"Cost: {wpn_cost} Gold", True, (255, 215, 0) if can_afford_wpn else (150, 150, 150))
-    bonus_text = small_font.render(f"+5 damage per level", True, (200, 200, 200))
+    # Draw shop items
+    y_offset_basic = items_rect.y + 50
+    y_offset_upgrade = items_rect.y + 50
+    item_buttons = []
     
-    surface.blit(wpn_text, (150, y))
-    surface.blit(cost_text, (450, y))
-    surface.blit(bonus_text, (150, y + 25))
+    for item_id, item_data in blacksmith_items.items():
+        # Separate basic items and upgrades into two columns
+        if item_data["type"] in ["weapon", "consumable"]:
+            # Basic items column (left)
+            item_bg = pygame.Rect(items_rect.x + 20, y_offset_basic, items_rect.width//2 - 40, 80)
+            y_offset_basic += 100
+        else:
+            # Upgrades column (right) 
+            item_bg = pygame.Rect(items_rect.x + items_rect.width//2 + 20, y_offset_upgrade, items_rect.width//2 - 40, 80)
+            y_offset_upgrade += 100
+        
+        # Different background color based on purchase status and affordability
+        if item_data.get("purchased", False):
+            bg_color = (40, 60, 40)  # Greenish for purchased
+            border_color = (100, 200, 100)
+        elif inventory["Gold"] >= item_data["cost"] and _can_purchase_item(item_id):
+            bg_color = (50, 50, 60)  # Normal for affordable
+            border_color = (150, 150, 200)
+        else:
+            bg_color = (60, 40, 40)  # Reddish for unaffordable/can't purchase
+            border_color = (200, 100, 100)
+        
+        pygame.draw.rect(surface, bg_color, item_bg)
+        pygame.draw.rect(surface, border_color, item_bg, 3)
+        
+        # Item name and description
+        name_text = font.render(item_data["name"], True, (255, 255, 255))
+        desc_text = small_font.render(item_data["description"], True, (200, 200, 200))
+        cost_text = font.render(f"{item_data['cost']} Gold", True, (255, 215, 0))
+        
+        surface.blit(name_text, (item_bg.x + 10, item_bg.y + 10))
+        surface.blit(desc_text, (item_bg.x + 10, item_bg.y + 35))
+        surface.blit(cost_text, (item_bg.x + item_bg.width - 100, item_bg.y + 10))
+        
+        # Purchase status or button
+        if item_data.get("purchased", False):
+            status_text = font.render("PURCHASED", True, (100, 255, 100))
+            surface.blit(status_text, (item_bg.x + item_bg.width - 110, item_bg.y + 40))
+        else:
+            button_rect = pygame.Rect(item_bg.x + item_bg.width - 100, item_bg.y + 40, 90, 30)
+            can_purchase = inventory["Gold"] >= item_data["cost"] and _can_purchase_item(item_id)
+            
+            if can_purchase:
+                pygame.draw.rect(surface, (80, 120, 80), button_rect)
+                pygame.draw.rect(surface, (120, 200, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (200, 255, 200))
+            else:
+                pygame.draw.rect(surface, (120, 80, 80), button_rect)
+                pygame.draw.rect(surface, (200, 120, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (255, 200, 200))
+            
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width()//2, 
+                                     button_rect.centery - button_text.get_height()//2))
+            item_buttons.append((button_rect, item_id))
     
-    if weapon_level >= 5:
-        max_text = small_font.render("(MAX LEVEL)", True, (0, 255, 0))
-        surface.blit(max_text, (150, y + 45))
+    # Close button
+    close_rect = pygame.Rect(shop_rect.centerx - 50, shop_rect.bottom - 50, 100, 40)
+    pygame.draw.rect(surface, (120, 80, 80), close_rect)
+    pygame.draw.rect(surface, (200, 120, 120), close_rect, 2)
+    close_text = font.render("CLOSE", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, 
+                            close_rect.centery - close_text.get_height()//2))
     
-    # Armor upgrade
-    y += 80
-    next_arm = armor_level + 1
-    arm_cost = upgrade_costs["armor"].get(next_arm - 1, 95) if next_arm <= 5 else 0
-    can_afford_arm = inventory["Gold"] >= arm_cost and armor_level < 5
+    return item_buttons, close_rect
+
+
+def _can_purchase_item(item_id):
+    """Check if an item can be purchased based on game state."""
+    item = blacksmith_items[item_id]
     
-    arm_text = font.render(f"2. Upgrade Armor to Level {next_arm}", True, (255, 255, 255) if can_afford_arm else (150, 150, 150))
-    arm_cost_text = font.render(f"Cost: {arm_cost} Gold", True, (255, 215, 0) if can_afford_arm else (150, 150, 150))
-    arm_bonus_text = small_font.render(f"+20 max health per level", True, (200, 200, 200))
+    if item_id == "weapon":
+        return not item["purchased"]  # Can buy if not already purchased
     
-    surface.blit(arm_text, (150, y))
-    surface.blit(arm_cost_text, (450, y))
-    surface.blit(arm_bonus_text, (150, y + 25))
+    elif item_id == "armor_upgrade":
+        return armor_level < 5  # Max armor level is 5
     
-    if armor_level >= 5:
-        max_text = small_font.render("(MAX LEVEL)", True, (0, 255, 0))
-        surface.blit(max_text, (150, y + 45))
+    elif item_id == "weapon_upgrade":
+        return has_weapon and weapon_level < 5  # Need weapon and max level is 5
     
-    # Instructions
-    y = box.bottom - 60
-    hints = [
-        "Press 1 to upgrade Weapon",
-        "Press 2 to upgrade Armor", 
-        "Press ESC or SPACE to close"
-    ]
+    elif item_id in ["ammo_pack", "health_potion"]:
+        return True  # Always available
     
-    for i, hint in enumerate(hints):
-        hint_text = small_font.render(hint, True, (200, 200, 200))
-        surface.blit(hint_text, (150, y + i * 20))
+    return False
+
+def handle_blacksmith_purchase(item_id):
+    """Handle purchasing items from the blacksmith."""
+    global has_weapon, ammo, max_ammo, health, max_health, inventory, weapon_level, armor_level
+    
+    item = blacksmith_items[item_id]
+    
+    if item.get("purchased", False):
+        set_message(f"You already purchased the {item['name']}!", (255, 200, 0), 2.0)
+        return False
+    
+    if inventory["Gold"] < item["cost"]:
+        set_message(f"Not enough gold for {item['name']}!", (255, 0, 0), 2.0)
+        return False
+    
+    if not _can_purchase_item(item_id):
+        if item_id == "weapon_upgrade" and not has_weapon:
+            set_message("You need to buy a weapon first!", (255, 200, 0), 2.0)
+        elif item_id == "weapon_upgrade" and weapon_level >= 5:
+            set_message("Weapon is already at maximum level!", (255, 200, 0), 2.0)
+        elif item_id == "armor_upgrade" and armor_level >= 5:
+            set_message("Armor is already at maximum level!", (255, 200, 0), 2.0)
+        else:
+            set_message(f"Cannot purchase {item['name']} right now!", (255, 200, 0), 2.0)
+        return False
+    
+    # Process purchase
+    inventory["Gold"] -= item["cost"]
+    
+    # Apply item effects
+    if item_id == "weapon":
+        item["purchased"] = True
+        has_weapon = True
+        ammo = max_ammo  # Give full ammo with weapon purchase
+        set_message(f"Purchased {item['name']}! You can now shoot with SPACE.", (0, 255, 0), 3.0)
+        quests["buy_weapon"]["complete"] = True
+        quests["upgrade_sword"]["active"] = True
+    
+    elif item_id == "ammo_pack":
+        ammo = min(max_ammo, ammo + 30)
+        set_message(f"Purchased {item['name']}! Ammo: {ammo}/{max_ammo}", (0, 255, 0), 2.0)
+    
+    elif item_id == "health_potion":
+        health = min(max_health, health + 30)
+        set_message(f"Used {item['name']}! +30 Health", (0, 255, 0), 2.0)
+    
+    elif item_id == "armor_upgrade":
+        armor_level += 1
+        max_health = 100 + (armor_level * 20)
+        health = max_health  # Fully heal when upgrading armor
+        set_message(f"Armor upgraded to level {armor_level}! Max health: {max_health}", (0, 255, 0), 2.0)
+        
+        # Mark as purchased if reached max level
+        if armor_level >= 5:
+            item["purchased"] = True
+    
+    elif item_id == "weapon_upgrade":
+        weapon_level += 1
+        set_message(f"Weapon upgraded to level {weapon_level}! Damage: {20 + (weapon_level * 5)}", (0, 255, 0), 2.0)
+        
+        # Mark as purchased if reached max level
+        if weapon_level >= 5:
+            item["purchased"] = True
+    
+    return True
+
 
 def draw_safe_puzzle(surface):
     """Draw the safe puzzle interface."""
@@ -1905,8 +2100,8 @@ def handle_interaction():
                             # Quest completion for elder
                             if npc["id"] == "elder" and not quests["talk_to_elder"]["complete"]:
                                 quests["talk_to_elder"]["complete"] = True
-                                quests["upgrade_sword"]["active"] = True
-                                set_message("Quest Updated!", (0, 255, 0), 2.0)
+                                quests["buy_weapon"]["active"] = True
+                                set_message("Quest Updated! Visit the blacksmith.", (0, 255, 0), 2.0)
                     return
     
     # Check for interactive objects
@@ -2046,6 +2241,16 @@ while running:
                 if back_button.collidepoint(mouse_pos):
                     game_state = "main_menu"
             
+            elif game_state == "playing" and upgrade_shop_visible:
+                item_buttons, close_rect = draw_blacksmith_shop(screen)
+                
+                for button_rect, item_id in item_buttons:
+                    if button_rect.collidepoint(mouse_pos):
+                        handle_blacksmith_purchase(item_id)
+                
+                if close_rect.collidepoint(mouse_pos):
+                    upgrade_shop_visible = False
+            
             elif game_state == "playing" and safe_visible:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
                 
@@ -2090,32 +2295,7 @@ while running:
                         dialogue_active = False
                 
                 elif upgrade_shop_visible:
-                    if event.key == pygame.K_1 and weapon_level < 5:
-                        next_level = weapon_level + 1
-                        cost = upgrade_costs["weapon"].get(next_level - 1, 100)
-                        if inventory["Gold"] >= cost:
-                            inventory["Gold"] -= cost
-                            weapon_level = next_level
-                            set_message(f"Weapon upgraded to level {weapon_level}!", (0, 255, 0), 2.0)
-                            if weapon_level > 1 and not quests["upgrade_sword"]["complete"]:
-                                quests["upgrade_sword"]["complete"] = True
-                                quests["collect_herbs"]["active"] = True
-                        else:
-                            set_message("Not enough gold!", (255, 0, 0), 1.5)
-                    
-                    elif event.key == pygame.K_2 and armor_level < 5:
-                        next_level = armor_level + 1
-                        cost = upgrade_costs["armor"].get(next_level - 1, 95)
-                        if inventory["Gold"] >= cost:
-                            inventory["Gold"] -= cost
-                            armor_level = next_level
-                            max_health = 100 + (armor_level * 20)  # +20 health per armor level
-                            health = min(health, max_health)  # Cap current health to new max
-                            set_message(f"Armor upgraded to level {armor_level}! +20 Max Health", (0, 255, 0), 2.0)
-                        else:
-                            set_message("Not enough gold!", (255, 0, 0), 1.5)
-                    
-                    elif event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
+                    if event.key == pygame.K_ESCAPE:
                         upgrade_shop_visible = False
                 
                 elif event.key == pygame.K_e:
@@ -2143,11 +2323,11 @@ while running:
                     if shoot_bullet():
                         set_message("Pew!", (255, 255, 0), 0.5)
                     elif not has_weapon:
-                        set_message("No weapon equipped!", (255, 0, 0), 1.0)
+                        set_message("You need a weapon! Visit the blacksmith.", (255, 200, 0), 2.0)
                     elif is_reloading:
                         set_message("Reloading...", (255, 200, 0), 0.5)
                     elif ammo == 0:
-                        set_message("Out of ammo! Press R to reload", (255, 0, 0), 1.0)
+                        set_message("Out of ammo! Buy more from blacksmith.", (255, 0, 0), 1.0)
                 
                 # Reload with R key - MANUAL RELOAD ONLY
                 elif event.key == pygame.K_r and has_weapon and not is_reloading and ammo < max_ammo:
@@ -2258,7 +2438,7 @@ while running:
         draw_quest_log(screen)
         draw_message(screen)
         draw_dialogue(screen)
-        draw_upgrade_shop(screen)
+        draw_blacksmith_shop(screen)
         draw_weapon_hud(screen)
         
         # Draw safe puzzle if active
