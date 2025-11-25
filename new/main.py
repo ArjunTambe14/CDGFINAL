@@ -530,10 +530,9 @@ room_data = {
     
     (0, 1, 2): {
         "name": "Castle Courtyard",
-        "objects": [ {"type": "invisible", "x": 580, "y": 255, "width": 195, "height": 200},
-                     
-                    {"type": "invisible", "x": 580, "y": 255, "width": 195, "height": 200}
-],
+        "objects": [ {"type": "invisible", "x": 580, "y": 255, "width": 195, "height": 200}, {"type": "invisible", "x": 490, "y": 10, "width": 420, "height": 130}
+                    
+        ],
         "interactive": [],
         "npcs": [],
         "items": [
