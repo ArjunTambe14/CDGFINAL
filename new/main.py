@@ -13,7 +13,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = True
+DEV_MODE = False
 
 # ===== SETUP =====
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
@@ -35,7 +35,7 @@ DAMAGE_INTERVAL = 1.0
 # ===== PLAYER SETUP =====
 player = pygame.Rect(400, 400, 40, 50)  
 player_speed = 7
-current_room = [0, 0, 0]
+current_room = [0, 2, 1]
 previous_room = tuple(current_room)
 player_direction = "right"  
 
@@ -558,12 +558,15 @@ room_data = {
     (0, 2, 1): {
         "name": "Secret Library",
         "objects": [
+            {"type": "invisible", "x": 110, "y": 110, "width": 90, "height": 570},
+            {"type": "invisible", "x": 620, "y": 110, "width": 90, "height": 570},
+            {"type": "invisible", "x": 120, "y": 90, "width": 600, "height": 80}
         ],
         "interactive": [
             {"type": "safe", "x": 350, "y": 300, "width": 100, "height": 100},
         ],
         "npcs": [
-            {"id": "herbcollector", "x": 400, "y": 500, "name": "Herb Collector"},
+            {"id": "herbcollector", "x": 500, "y": 500, "name": "Herb Collector"},
         ],
         "items": [
             {"type": "gold", "x": 250, "y": 400, "id": "gold_0_2_1_1"},
