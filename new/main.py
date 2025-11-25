@@ -13,7 +13,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = False
+DEV_MODE = True
 
 # ===== SETUP =====
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
@@ -460,11 +460,12 @@ room_data = {
     (0, 0, 1): {
         "name": "Blacksmith's Forge",
         "objects": [
-            {"type": "rock", "x": 150, "y": 500, "width": 100, "height": 100},
-            {"type": "rock", "x": 600, "y": 600, "width": 50, "height": 50},
+            {"type": "invisible", "x": 190, "y": 180, "width": 70, "height": 450},
+             {"type": "invisible", "x": 540, "y": 180, "width": 70, "height": 450},
+             {"type": "invisible", "x": 250, "y": 170, "width": 340, "height": 70}
         ],
         "interactive": [
-            {"type": "anvil", "x": 550, "y": 350, "width": 60, "height": 40},
+            {"type": "anvil", "x": 370, "y": 350, "width": 90, "height": 60},
         ],
         "npcs": [],
         "items": [
