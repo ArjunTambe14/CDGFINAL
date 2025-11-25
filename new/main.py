@@ -216,7 +216,7 @@ def load_smart_bg(level, row, col):
         (0, 1, 2): "UpdatedCastleCourt",
         (0, 2, 0): "throneroom",
         (0, 2, 1): "library",
-        (0, 2, 2): "portal",
+        (0, 2, 2): "portalUpdated1",
     }
     
     room_type = background_mapping.get((level, row, col))
