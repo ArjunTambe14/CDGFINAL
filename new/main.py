@@ -13,7 +13,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = False
+DEV_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
 
 #  setup
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
