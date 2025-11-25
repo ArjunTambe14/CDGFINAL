@@ -233,6 +233,7 @@ weapon_level = 1
 armor_level = 0
 GOBLIN_CONTACT_DAMAGE = 10
 goblin_contact_cooldown = 0.0  
+player_speed_boost_timer = 0.0  # Temporary speed boost timer for special pickups
 
 # ===== INVENTORY SYSTEM =====
 inventory = {
@@ -374,6 +375,9 @@ GOBLIN_WAVES = {
     ],
     (0, 1, 0): [
         [(100, 100), (200, 150), (300, 200), (400, 150), (500, 100)],  # 5 goblins
+    ],
+    (0, 1, 2): [
+        [(520, 360), (620, 480)],  # courtyard ambush
     ],
 }
 
@@ -1804,7 +1808,7 @@ def update_goblins(dt):
 
 def pickup_items():
     """Handle item collection."""
-    global message, message_timer, message_color
+    global message, message_timer, message_color, health, player_speed_boost_timer
     
     for rect, x, y in gold_items:
         if player.colliderect(rect):
@@ -1822,7 +1826,15 @@ def pickup_items():
         if player.colliderect(rect):
             inventory["Health Potions"] += 1
             collected_potions.add((*current_room, x, y))
-            set_message("+1 Health Potion", (255, 0, 0), 1.5)
+
+            # Castle Courtyard potion grants a temporary speed boost and heal
+            if tuple(current_room) == (0, 1, 2):
+                global health, player_speed_boost_timer
+                player_speed_boost_timer = 8.0
+                health = min(max_health, health + 30)
+                set_message("+1 Health Potion (Boost active!)", (0, 255, 0), 1.8)
+            else:
+                set_message("+1 Health Potion", (255, 0, 0), 1.5)
     
     # Handle key and time shard pickup
     room_key = tuple(current_room)
@@ -2196,7 +2208,10 @@ while running:
         if dialogue_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible or maze_visible:
             mv_x, mv_y = 0, 0
         
-        dx, dy = mv_x * player_speed, mv_y * player_speed
+        # Apply temporary speed boosts (e.g., courtyard potion)
+        player_speed_boost_timer = max(0.0, player_speed_boost_timer - (dt / 1000.0))
+        speed_bonus = 3 if player_speed_boost_timer > 0 else 0
+        dx, dy = mv_x * (player_speed + speed_bonus), mv_y * (player_speed + speed_bonus)
         
         # Update enemy movement before drawing the room
         update_goblins(dt)
