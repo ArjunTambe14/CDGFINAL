@@ -2,7 +2,7 @@ import pygame
 import os
 import math
 
-# Core game loop for Chronicles of Time: handles movement, combat, UI, and progression.
+# this is the core game loop for chronicles of time and it drives movement combat ui and progression
 
 pygame.init()
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
@@ -207,6 +207,7 @@ def load_smart_bg(level, row, col):
     if level != 0:
         return None
     
+    # this maps rooms to backgrounds so each space feels connected
     background_mapping = {
         (0, 0, 0): "village",
         (0, 0, 1): "blacksmith", 
@@ -1196,7 +1197,7 @@ def draw_room(surface, level, row, col):
     """Draw the current room using images only."""
     global colliders, gold_items, herbs, potions, npcs, interactive_objects, damage_zones
 
-    # Clear dynamic lists before repopulating this frame
+    # clearing dynamic lists each frame keeps objects synced to the current room state
     colliders = []
     gold_items = []
     herbs = []
@@ -1208,28 +1209,28 @@ def draw_room(surface, level, row, col):
     room_key = (level, row, col)
     room_info = room_data.get(room_key, {})
 
-    # Load and draw background
+    # draw background first so everything else sits on top
     bg_img = load_smart_bg(level, row, col)
     if bg_img:
         surface.blit(bg_img, (0, 0))
     else:
-        # Fallback background
+        # simple fallback background if an image is missing
         surface.fill((80, 120, 80))
 
-    # Draw objects
+    # place static objects like rocks and portal frame
     for obj in room_info.get("objects", []):
         draw_object(obj["x"], obj["y"], obj["type"], surface, level, obj["width"], obj["height"])
 
-    # Draw interactive objects
+    # place interactive props such as levers and chests
     for inter in room_info.get("interactive", []):
         draw_object(inter["x"], inter["y"], inter["type"], surface, level, inter["width"], inter["height"])
 
-    # Draw NPCs (except boss and goblins)
+    # draw friendly npcs while goblins and boss are handled elsewhere
     for npc in room_info.get("npcs", []):
         if npc.get("id") in ["goblin", "boss1"]:
             continue  # Goblins and boss are handled by enemy system
         
-        # Check if knight is rescued
+        # track if the knight has been rescued so we render the right state
         rescued = False
         if npc.get("id") == "knight":
             rescued = npc.get("rescued", False)
@@ -1252,6 +1253,7 @@ def draw_room(surface, level, row, col):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
 def draw_health_bar(surface):
+    # always show the health bar near the bottom so the player knows their status
     """Draw permanent health bar at bottom middle of screen."""
     health_width = 400
     health_x = ROOM_WIDTH // 2 - health_width // 2
@@ -1273,6 +1275,7 @@ def draw_health_bar(surface):
     surface.blit(armor_text, (health_x + health_width - 150, health_y + 5))
 
 def draw_hud(surface):
+    # overlay that lets the player inspect inventory without pausing the world
     """Draw HUD with inventory (health bar is now drawn separately)."""
     if not hud_visible:
         return
@@ -1290,6 +1293,7 @@ def draw_hud(surface):
             y += 30
 
 def draw_minimap(surface, level, row, col):
+    # small map to keep the player oriented inside the three by three grid
     """Draw minimap showing current room."""
     if not map_visible:
         return
@@ -2216,6 +2220,7 @@ back_button_hover = False
 # Initialize boss when entering throne room for the first time
 boss_initialized = False
 
+# main loop listens for input updates game state and draws world
 while running:
     dt = clock.tick(60)
     keys_pressed = pygame.key.get_pressed()
@@ -2226,7 +2231,7 @@ while running:
             running = False
         
         elif event.type == pygame.MOUSEMOTION:
-            # Update button hover states based on current screen
+            # handle hover states so menus and puzzles feel responsive
             if game_state == "main_menu":
                 play_button, how_to_button, about_button = draw_main_menu()
                 play_button_hover = play_button.collidepoint(mouse_pos)
@@ -2291,11 +2296,11 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if game_state == "playing":
                 if maze_visible:
-                    # Handle maze navigation with arrow keys
+                    # arrow keys move through the maze overlay
                     handle_maze_input()
                 
                 elif safe_visible:
-                    # Handle number input for safe
+                    # capture safe code input
                     if event.unicode.isdigit() and len(safe_input) < 4:
                         handle_safe_input(event.unicode)
                     elif event.key == pygame.K_BACKSPACE:
