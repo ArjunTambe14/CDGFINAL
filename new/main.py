@@ -35,7 +35,7 @@ DAMAGE_INTERVAL = 1.0
 # ===== PLAYER SETUP =====
 player = pygame.Rect(400, 400, 40, 50)  
 player_speed = 7
-current_room = [0, 2, 1]
+current_room = [0, 0, 0]
 previous_room = tuple(current_room)
 player_direction = "right"  
 
