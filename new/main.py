@@ -18,7 +18,7 @@ GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
 DEV_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
-
+DEV_SKIP_TO_LEVEL_2 = True  
 # ------------ LEVEL 2 (CYBERPUNK) ------------
 LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
 LEVEL_2_BG_MAP = {               # (row,col) : filename  (no extension)
@@ -750,7 +750,13 @@ def throw_axe():
             "angle": 0
         })
         set_message("Boss throws an axe!", (255, 100, 100), 1.0)
-
+def enter_level_2():
+    """Warp player to Level-2 Rooftop Hideout, centre of room."""
+    current_room[0] = 1          # level 2
+    current_room[1] = 0          # row 0  -> Rooftop Hideout
+    current_room[2] = 0          # col 0
+    player.center = (ROOM_WIDTH // 2, ROOM_HEIGHT // 2)
+    set_message("Welcome to Level 2 – The Neon City!", (0, 255, 255), 4.0)
 def update_thrown_axes(dt_sec):
     """Update positions of thrown axes and check for collisions."""
     global boss_thrown_axes, health
@@ -1351,7 +1357,7 @@ def draw_minimap(surface, level, row, col):
             else:
                 pygame.draw.rect(surface, (100, 100, 100), rect)
     
-    room_name = room_data.get((level, row, col), {}).get("name", "Unknown")
+    room_name = room_data.get((level, row, col), {}).get("name", f"Room ({row},{col})")
     name_text = small_font.render(room_name, True, (255, 255, 255))
     surface.blit(name_text, (map_x, map_y + map_size + 10))
 
@@ -2193,23 +2199,11 @@ def handle_interaction():
             
             elif obj_type == "portal" and room_key == (0, 2, 2):
                 if inventory["Keys"] >= 2:
-                    # ---- MOVE TO LEVEL 2 ----
-                    current_room[0] = 1               
-                    current_room[1] = 0               
-                    current_room[2] = 0
-                    player.x = ROOM_WIDTH // 2        
-                    player.y = ROOM_HEIGHT // 2
-                    
-                    set_message(f"Welcome to the next level – {LEVEL_2_NAME}!", (0, 255, 255), 4.0)
-                    bullets.clear()
-                    boss = None                       
-                
+                    enter_level_2()
                 else:
                     need = 2 - inventory["Keys"]
                     set_message(f"You need {need} more key(s) to activate the portal!", (255, 200, 0), 2.0)
-                    
-            else:
-                    set_message(f"You need {2 - inventory['Keys']} more key(s) to activate the portal!", (255, 200, 0), 2.0)
+
 
 def give_herbs_to_collector():
     """Handle G key to give herbs to the herb collector."""
@@ -2379,6 +2373,9 @@ while running:
                 
                 elif event.key == pygame.K_f:
                     handle_interaction()
+                    
+                elif event.key == pygame.K_t:
+                    enter_level_2()
                 
                 elif event.key == pygame.K_g:
                     give_herbs_to_collector()
