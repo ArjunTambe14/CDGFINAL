@@ -17,7 +17,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
+DEV_MODE = True # this is for debugging and adding invisible barriers so that we can see where they are
 DEV_SKIP_TO_LEVEL_2 = True  
 # ------------ LEVEL 2 (CYBERPUNK) ------------
 LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
@@ -607,7 +607,10 @@ room_data = {
     # ------------------------------------------------------
     # LEVEL 1  –  cyberpunk / neon city  (EMPTY SHELLS)
     # ------------------------------------------------------
-    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [{"type": "invisible", "x": 150,   "y": 585, "width": 500, "height": 65},
+                                                          {"type": "invisible", "x": 135,   "y": 275,   "width": 60,  "height": 370},
+                                                          {"type": "invisible", "x": 145,   "y": 275,   "width": 200, "height": 50},
+                                                          {"type": "invisible", "x": 450,   "y": 275,   "width": 200, "height": 50}  ], "interactive": [], "npcs": [], "items": []},
     (1, 0, 1): {"name": "Alley Market",      "objects": [], "interactive": [], "npcs": [], "items": []},
     (1, 0, 2): {"name": "Data Hub",          "objects": [], "interactive": [], "npcs": [], "items": []},
     (1, 1, 0): {"name": "Subway Tunnels",    "objects": [], "interactive": [], "npcs": [], "items": []},
