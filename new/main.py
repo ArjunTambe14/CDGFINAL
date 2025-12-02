@@ -1,3 +1,7 @@
+# Arjun Tambe, Shuban Nanisetty, Charanjit Kukkadapu
+# Final Project: Chronicles of Time level 1 
+#Our game features an interactive based free map in which they can interact with bosses npcs and buy stuff, they have to compelte quests in order to progress to the next level.
+
 import pygame
 import os
 import math
@@ -15,6 +19,19 @@ GRID_HEIGHT = 3
 LEVELS = 3
 DEV_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
 
+# ------------ LEVEL 2 (CYBERPUNK) ------------
+LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
+LEVEL_2_BG_MAP = {               # (row,col) : filename  (no extension)
+    (0,0): "rooftop_hideout",
+    (0,1): "alley_market",
+    (0,2): "data_hub",
+    (1,0): "subway_tunnels",
+    (1,1): "neon_streets",
+    (1,2): "factory_exterior",
+    (2,0): "core_reactor_room",
+    (2,1): "ai_control_room",
+    (2,2): "time_gateway",
+}
 #  setup
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
 pygame.display.set_caption("Chronicles of Time")
@@ -203,27 +220,31 @@ def load_image(name, width=None, height=None):
     return fallback
 
 def load_smart_bg(level, row, col):
-    """Load background using smart mapping."""
-    if level != 0:
+    """Return Surface for any level, or None if no file."""
+    if level == 0:   # your existing level-1 map
+        background_mapping = {
+            (0, 0, 0): "village",
+            (0, 0, 1): "blacksmith",
+            (0, 0, 2): "forestPath",
+            (0, 1, 0): "goblincamp",
+            (0, 1, 1): "castlebridge",
+            (0, 1, 2): "UpdatedCastleCourt",
+            (0, 2, 0): "throneroom",
+            (0, 2, 1): "library",
+            (0, 2, 2): "portalUpdated1",
+        }
+        room_type = background_mapping.get((level, row, col))
+        if room_type:
+            return load_image(f"backgrounds/{room_type}.png", ROOM_WIDTH, ROOM_HEIGHT)
         return None
-    
-    background_mapping = {
-        (0, 0, 0): "village",
-        (0, 0, 1): "blacksmith", 
-        (0, 0, 2): "forestPath",
-        (0, 1, 0): "goblincamp",
-        (0, 1, 1): "castlebridge",
-        (0, 1, 2): "UpdatedCastleCourt",
-        (0, 2, 0): "throneroom",
-        (0, 2, 1): "library",
-        (0, 2, 2): "portalUpdated1",
-    }
-    
-    room_type = background_mapping.get((level, row, col))
-    if room_type:
-        filename = f"backgrounds/{room_type}.png"
-        return load_image(filename, ROOM_WIDTH, ROOM_HEIGHT)
-    
+
+    elif level == 1:   # ------------- LEVEL 2 -------------
+        filename = LEVEL_2_BG_MAP.get((row, col))
+        if filename:
+            return load_image(f"backgrounds/{filename}.png", ROOM_WIDTH, ROOM_HEIGHT)
+        # if no image file exists, fall through to white background
+        return None
+
     return None
 
 def load_player_image(direction="right"):
@@ -440,12 +461,15 @@ _init_goblin_rooms()
 
 # room data, this uses a dictionary to define room layouts and contents
 room_data = {
+
+    # LEVEL 0  –  medieval world
+
     (0, 0, 0): {
         "name": "Village Square",
         "objects": [
-             {"type": "invisible", "x": 110, "y": 100, "width": 140, "height": 600},
-             {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
-             {"type": "invisible", "x": 290, "y": 100, "width": 240, "height": 170},
+            {"type": "invisible", "x": 110, "y": 100, "width": 140, "height": 600},
+            {"type": "invisible", "x": 570, "y": 100, "width": 140, "height": 600},
+            {"type": "invisible", "x": 290, "y": 100, "width": 240, "height": 170},
         ],
         "interactive": [],
         "npcs": [
@@ -456,13 +480,13 @@ room_data = {
             {"type": "gold", "x": 450, "y": 40, "id": "gold_0_0_0_2"},
         ]
     },
-    
+
     (0, 0, 1): {
         "name": "Blacksmith's Forge",
         "objects": [
             {"type": "invisible", "x": 190, "y": 180, "width": 70, "height": 450},
-             {"type": "invisible", "x": 540, "y": 180, "width": 70, "height": 450},
-             {"type": "invisible", "x": 250, "y": 170, "width": 340, "height": 70}
+            {"type": "invisible", "x": 540, "y": 180, "width": 70, "height": 450},
+            {"type": "invisible", "x": 250, "y": 170, "width": 340, "height": 70}
         ],
         "interactive": [
             {"type": "anvil", "x": 370, "y": 350, "width": 90, "height": 60},
@@ -473,7 +497,7 @@ room_data = {
             {"type": "gold", "x": 700, "y": 300, "id": "gold_0_0_1_2"},
         ]
     },
-    
+
     (0, 0, 2): {
         "name": "Forest Path",
         "objects": [
@@ -493,7 +517,7 @@ room_data = {
             {"type": "herb", "x": 450, "y": 600, "id": "herb_0_0_2_3"},
         ]
     },
-    
+
     (0, 1, 0): {
         "name": "Goblin Camp",
         "objects": [
@@ -503,18 +527,18 @@ room_data = {
             {"type": "invisible", "x": 405, "y": 185, "width": 100, "height": 100},
         ],
         "interactive": [
-            {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},  
+            {"type": "cage", "x": 100, "y": 500, "width": 120, "height": 120},
         ],
         "npcs": [
-            {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},  
+            {"id": "knight", "x": 130, "y": 530, "name": "Knight Aelric", "rescued": False},
         ],
         "items": [
             {"type": "potion", "x": 150, "y": 350, "id": "potion_0_1_0_1"},
+ 
             {"type": "gold", "x": 600, "y": 400, "id": "gold_0_1_0_1"},
-            
         ]
     },
-    
+
     (0, 1, 1): {
         "name": "Castle Bridge",
         "objects": [
@@ -527,11 +551,12 @@ room_data = {
         "npcs": [],
         "items": []
     },
-    
+
     (0, 1, 2): {
         "name": "Castle Courtyard",
-        "objects": [ {"type": "invisible", "x": 580, "y": 255, "width": 195, "height": 200}, {"type": "invisible", "x": 490, "y": 10, "width": 450, "height": 130}
-                    
+        "objects": [
+            {"type": "invisible", "x": 580, "y": 255, "width": 195, "height": 200},
+            {"type": "invisible", "x": 490, "y": 10, "width": 450, "height": 130}
         ],
         "interactive": [],
         "npcs": [],
@@ -540,11 +565,10 @@ room_data = {
             {"type": "gold", "x": 550, "y": 350, "id": "gold_0_1_2_1"},
         ]
     },
-    
+
     (0, 2, 0): {
         "name": "Throne Room",
-        "objects": [
-        ],
+        "objects": [],
         "interactive": [],
         "npcs": [
             {"id": "boss1", "x": 350, "y": 300, "name": "Goblin King"},
@@ -554,7 +578,7 @@ room_data = {
             {"type": "gold", "x": 700, "y": 150, "id": "gold_0_2_0_2"},
         ]
     },
-    
+
     (0, 2, 1): {
         "name": "Secret Library",
         "objects": [
@@ -572,7 +596,7 @@ room_data = {
             {"type": "gold", "x": 250, "y": 400, "id": "gold_0_2_1_1"},
         ]
     },
-    
+
     (0, 2, 2): {
         "name": "Time Portal",
         "objects": [],
@@ -582,6 +606,19 @@ room_data = {
         "npcs": [],
         "items": []
     },
+
+    # ------------------------------------------------------
+    # LEVEL 1  –  cyberpunk / neon city  (EMPTY SHELLS)
+    # ------------------------------------------------------
+    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 0, 1): {"name": "Alley Market",      "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 0, 2): {"name": "Data Hub",          "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 1, 1): {"name": "Neon Streets",      "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 1, 2): {"name": "Factory Exterior",  "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 2, 0): {"name": "Core Reactor Room", "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 2, 1): {"name": "AI Control Room",   "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 2, 2): {"name": "Time Gateway",      "objects": [], "interactive": [], "npcs": [], "items": []},
 }
 
 goblin_states = {}
@@ -2155,10 +2192,23 @@ def handle_interaction():
                     set_message("The safe is already unlocked.", (200, 200, 200), 1.5)
             
             elif obj_type == "portal" and room_key == (0, 2, 2):
-                if inventory["Keys"] >= 2: 
-                    set_message("Portal Activated! Moving to next era...", (150, 150, 255), 2.0)
+                if inventory["Keys"] >= 2:
+                    # ---- MOVE TO LEVEL 2 ----
+                    current_room[0] = 1               
+                    current_room[1] = 0               
+                    current_room[2] = 0
+                    player.x = ROOM_WIDTH // 2        
+                    player.y = ROOM_HEIGHT // 2
                     
+                    set_message(f"Welcome to the next level – {LEVEL_2_NAME}!", (0, 255, 255), 4.0)
+                    bullets.clear()
+                    boss = None                       
+                
                 else:
+                    need = 2 - inventory["Keys"]
+                    set_message(f"You need {need} more key(s) to activate the portal!", (255, 200, 0), 2.0)
+                    
+            else:
                     set_message(f"You need {2 - inventory['Keys']} more key(s) to activate the portal!", (255, 200, 0), 2.0)
 
 def give_herbs_to_collector():
