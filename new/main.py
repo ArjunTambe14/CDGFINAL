@@ -611,14 +611,39 @@ room_data = {
                                                           {"type": "invisible", "x": 135,   "y": 275,   "width": 60,  "height": 370},
                                                           {"type": "invisible", "x": 145,   "y": 275,   "width": 200, "height": 50},
                                                           {"type": "invisible", "x": 450,   "y": 275,   "width": 200, "height": 50}  ], "interactive": [], "npcs": [], "items": []},
-    (1, 0, 1): {"name": "Alley Market",      "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 0, 2): {"name": "Data Hub",          "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 1, 1): {"name": "Neon Streets",      "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 1, 2): {"name": "Factory Exterior",  "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 2, 0): {"name": "Core Reactor Room", "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 2, 1): {"name": "AI Control Room",   "objects": [], "interactive": [], "npcs": [], "items": []},
-    (1, 2, 2): {"name": "Time Gateway",      "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 0, 1): {"name": "Alley Market",      "objects": [{"type": "invisible", "x": 0,   "y": 0, "width": 230, "height": 350},
+                                                         {"type": "invisible", "x": 0,   "y": 500, "width": 230, "height": 350}],
+                 "interactive": [], 
+                 "npcs": [], 
+                 "items": []},
+    (1, 0, 2): {"name": "Data Hub",          "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                   "items": []},
+    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                 "items": []},
+    (1, 1, 1): {"name": "Neon Streets",      "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                   "items": []},
+    (1, 1, 2): {"name": "Factory Exterior",  "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                   "items": []},
+    (1, 2, 0): {"name": "Core Reactor Room", "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                   "items": []},
+    (1, 2, 1): {"name": "AI Control Room",   "objects": [],
+                 "interactive": []
+                 , "npcs": [],
+                   "items": []},
+    (1, 2, 2): {"name": "Time Gateway",      "objects": [], 
+                "interactive": []
+                , "npcs": [],
+                  "items": []},
 }
 
 goblin_states = {}
@@ -1974,14 +1999,7 @@ def room_transition():
     """Handle moving between rooms."""
     level, row, col = current_room
     
-    if player.left < 0:
-        if col > 0:
-            current_room[2] -= 1
-            player.right = ROOM_WIDTH
-        else:
-            player.left = 0
-    
-    elif player.right > ROOM_WIDTH:
+    if player.right > ROOM_WIDTH:
         if col < GRID_WIDTH - 1:
             current_room[2] += 1
             player.left = 0
@@ -2001,6 +2019,19 @@ def room_transition():
             player.top = 0
         else:
             player.bottom = ROOM_HEIGHT
+    elif player.left < 0:
+        if col > 0:
+            # ------ Market → Rooftop  ONLY ------
+            if current_room[0] == 1 and current_room[1] == 0 and current_room[2] == 1:  # still IN market
+                current_room[2] = 0          
+                player.x = 750               
+                player.y = 400
+                player.left = 0             
+                return                      
+            current_room[2] -= 1
+            player.right = ROOM_WIDTH
+        else:
+            player.left = 0
 
 def update_goblins(dt):
     """Move goblins toward the player in the Forest Path."""
