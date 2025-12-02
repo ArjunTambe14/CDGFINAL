@@ -17,7 +17,7 @@ ROOM_HEIGHT = 800
 GRID_WIDTH = 3
 GRID_HEIGHT = 3
 LEVELS = 3
-DEV_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
+DEV_MODE = True # this is for debugging and adding invisible barriers so that we can see where they are
 DEV_SKIP_TO_LEVEL_2 = True  
 # ------------ LEVEL 2 (CYBERPUNK) ------------
 LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
@@ -237,14 +237,11 @@ def load_smart_bg(level, row, col):
         if room_type:
             return load_image(f"backgrounds/{room_type}.png", ROOM_WIDTH, ROOM_HEIGHT)
         return None
-
     elif level == 1:   # ------------- LEVEL 2 -------------
         filename = LEVEL_2_BG_MAP.get((row, col))
         if filename:
             return load_image(f"backgrounds/{filename}.png", ROOM_WIDTH, ROOM_HEIGHT)
-        # if no image file exists, fall through to white background
         return None
-
     return None
 
 def load_player_image(direction="right"):
@@ -610,7 +607,10 @@ room_data = {
     # ------------------------------------------------------
     # LEVEL 1  –  cyberpunk / neon city  (EMPTY SHELLS)
     # ------------------------------------------------------
-    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [], "interactive": [], "npcs": [], "items": []},
+    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [{"type": "invisible", "x": 150,   "y": 585, "width": 500, "height": 65},
+                                                          {"type": "invisible", "x": 135,   "y": 275,   "width": 60,  "height": 370},
+                                                          {"type": "invisible", "x": 145,   "y": 275,   "width": 200, "height": 50},
+                                                          {"type": "invisible", "x": 450,   "y": 275,   "width": 200, "height": 50}  ], "interactive": [], "npcs": [], "items": []},
     (1, 0, 1): {"name": "Alley Market",      "objects": [], "interactive": [], "npcs": [], "items": []},
     (1, 0, 2): {"name": "Data Hub",          "objects": [], "interactive": [], "npcs": [], "items": []},
     (1, 1, 0): {"name": "Subway Tunnels",    "objects": [], "interactive": [], "npcs": [], "items": []},
@@ -1240,7 +1240,7 @@ def draw_room(surface, level, row, col):
     """Draw the current room using images only."""
     global colliders, gold_items, herbs, potions, npcs, interactive_objects, damage_zones
 
-
+    # clearing dynamic lists each frame keeps objects synced to the current room state
     colliders = []
     gold_items = []
     herbs = []
@@ -1252,28 +1252,28 @@ def draw_room(surface, level, row, col):
     room_key = (level, row, col)
     room_info = room_data.get(room_key, {})
 
-
+    # draw background first so everything else sits on top
     bg_img = load_smart_bg(level, row, col)
     if bg_img:
         surface.blit(bg_img, (0, 0))
     else:
-
+        # simple fallback background if an image is missing
         surface.fill((80, 120, 80))
 
-
+    # place static objects like rocks and portal frame
     for obj in room_info.get("objects", []):
         draw_object(obj["x"], obj["y"], obj["type"], surface, level, obj["width"], obj["height"])
 
-
+    # place interactive props such as levers and chests
     for inter in room_info.get("interactive", []):
         draw_object(inter["x"], inter["y"], inter["type"], surface, level, inter["width"], inter["height"])
 
- 
+    # draw friendly npcs while goblins and boss are handled elsewhere
     for npc in room_info.get("npcs", []):
         if npc.get("id") in ["goblin", "boss1"]:
             continue  
         
-
+        # track if the knight has been rescued so we render the right state
         rescued = False
         if npc.get("id") == "knight":
             rescued = npc.get("rescued", False)
@@ -1296,6 +1296,7 @@ def draw_room(surface, level, row, col):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
 def draw_health_bar(surface):
+    # always show the health bar near the bottom so the player knows their status
     """Draw permanent health bar at bottom middle of screen."""
     health_width = 400
     health_x = ROOM_WIDTH // 2 - health_width // 2
@@ -1317,6 +1318,7 @@ def draw_health_bar(surface):
     surface.blit(armor_text, (health_x + health_width - 150, health_y + 5))
 
 def draw_hud(surface):
+    # overlay that lets the player inspect inventory without pausing the world
     """Draw HUD with inventory (health bar is now drawn separately)."""
     if not hud_visible:
         return
@@ -1334,6 +1336,7 @@ def draw_hud(surface):
             y += 30
 
 def draw_minimap(surface, level, row, col):
+    # small map to keep the player oriented inside the three by three grid
     """Draw minimap showing current room."""
     if not map_visible:
         return
@@ -2261,6 +2264,7 @@ back_button_hover = False
 
 boss_initialized = False
 
+# main loop listens for input updates game state and draws world
 while running:
     dt = clock.tick(60)
     keys_pressed = pygame.key.get_pressed()
@@ -2271,7 +2275,7 @@ while running:
             running = False
         
         elif event.type == pygame.MOUSEMOTION:
-            
+            # handle hover states so menus and puzzles feel responsive
             if game_state == "main_menu":
                 play_button, how_to_button, about_button = draw_main_menu()
                 play_button_hover = play_button.collidepoint(mouse_pos)
@@ -2336,11 +2340,11 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if game_state == "playing":
                 if maze_visible:
-                   
+                    # arrow keys move through the maze overlay
                     handle_maze_input()
                 
                 elif safe_visible:
-                    
+                    # capture safe code input
                     if event.unicode.isdigit() and len(safe_input) < 4:
                         handle_safe_input(event.unicode)
                     elif event.key == pygame.K_BACKSPACE:
