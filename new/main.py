@@ -29,8 +29,8 @@ LEVEL_2_BG_MAP = {               # (row,col) : filename  (no extension)
     (1,1): "neon_streets",
     (1,2): "factory_exterior",
     (2,0): "core_reactor_room",
-    (2,1): "ai_control_room",
-    (2,2): "time_gateway",
+    (2,1): "time_gateway",
+    (2,2): "ai_control_room",
 }
 #  setup
 screen = pygame.display.set_mode((ROOM_WIDTH, ROOM_HEIGHT))
@@ -644,11 +644,11 @@ room_data = {
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 2, 1): {"name": "AI Control Room",   "objects": [],
+    (1, 2, 1): {"name": "Time Gateway",   "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 2, 2): {"name": "Time Gateway",      "objects": [], 
+    (1, 2, 2): {"name": "AI Control Room",      "objects": [], 
                 "interactive": []
                 , "npcs": [],
                   "items": []},
