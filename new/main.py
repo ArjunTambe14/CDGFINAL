@@ -2031,7 +2031,7 @@ def room_transition():
             if current_room[0] == 1 and current_room[1] == 0 and current_room[2] == 1:  # still IN market
                 current_room[2] = 0          
                 player.x = 750               
-                player.y = 400
+                player.y = 400 
                 player.left = 0             
                 return                      
             current_room[2] -= 1
