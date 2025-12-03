@@ -626,7 +626,9 @@ room_data = {
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [],
+    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [
+                                                        {"type": "invisible", "x": 88, "y": 427, "width": 294, "height": 294}
+                                                     ],
                  "interactive": []
                  , "npcs": [],
                  "items": []},
