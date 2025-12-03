@@ -617,7 +617,7 @@ room_data = {
                                                              {"type": "invisible", "x": 460,   "y": 0,   "width": 354, "height": 285},
                                                               {"type": "invisible", "x": 610,   "y": 520, "width": 400, "height": 100},
                                                                 {"type": "invisible", "x": 610,   "y": 300, "width": 400, "height": 100}], "interactive": [], "npcs": [], "items": []},
-    (1, 0, 1): {"name": "Alley Market",      "objects": [{"type": "invisible", "x": 0,   "y": 0, "width": 230, "height": 350},
+    (1, 0, 1): {"name": "Alley Market",      "objects": [{"type": "invisible", "x": 0,   "y": 40, "width": 230, "height": 350},
                                                          {"type": "invisible", "x": 0,   "y": 500, "width": 230, "height": 350}],
                  "interactive": [], 
                  "npcs": [], 
@@ -2030,9 +2030,7 @@ def room_transition():
             # ------ Market → Rooftop  ONLY ------
             if current_room[0] == 1 and current_room[1] == 0 and current_room[2] == 1:  # still IN market
                 current_room[2] = 0          
-                player.x = 750               
-                player.y = 400 
-                player.left = 0             
+                player.center = (625, 450)  # spawn point when entering Rooftop from Market
                 return                      
             current_room[2] -= 1
             player.right = ROOM_WIDTH
