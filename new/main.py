@@ -1216,8 +1216,8 @@ def draw_goblins(surface, room_key):
             continue
         img = load_npc_image("goblin")
         surface.blit(img, (goblin["x"], goblin["y"]))
-        rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
-        colliders.append(rect)
+        # Goblins handle their own collision/damage; keep them out of the collider list
+        # so they do not push the player back like walls.
 
 def draw_item(surface, x, y, item_type, item_id):
     """Draw items using images."""
