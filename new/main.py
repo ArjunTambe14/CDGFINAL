@@ -1,5 +1,5 @@
 # Arjun Tambe, Shuban Nanisetty, Charanjit Kukkadapu
-# Final Project: Chronicles of Time level 1 
+# Final Project: Chr icles of Time level 1 
 #Our game features an interactive based free map in which they can interact with bosses npcs and buy stuff, they have to compelte quests in order to progress to the next level.
 
 import pygame
@@ -704,7 +704,7 @@ def update_boss(dt):
         boss_throw_cooldown -= dt_sec
     
     # boss movement 
-    speed = 70  
+    speed = 300  
     dx = player.centerx - boss["rect"].centerx
     dy = player.centery - boss["rect"].centery
     dist = math.hypot(dx, dy)
@@ -772,7 +772,7 @@ def throw_axe():
     dist = math.hypot(dx, dy)
     
     if dist > 0:
-        speed = 200  
+        speed = 400  
         boss_thrown_axes.append({
             "x": float(boss["rect"].centerx),
             "y": float(boss["rect"].centery),
