@@ -2547,7 +2547,9 @@ while running:
         draw_blacksmith_shop(screen)
         draw_weapon_hud(screen)
         
-        
+        if DEV_MODE:
+            coord_surf = small_font.render(f"{player.x:.0f}, {player.y:.0f}", True, (255, 255, 0))
+            screen.blit(coord_surf, (10, ROOM_HEIGHT - 20))
         if safe_visible:
             buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
         
