@@ -50,11 +50,16 @@ damage_timer = 0.0
 DAMAGE_INTERVAL = 1.0  
 
 #  player setup
-player = pygame.Rect(400, 400, 40, 50)  
+player = pygame.Rect(400, 400, 60, 75)  
 player_speed = 7
 current_room = [0, 0, 0]
 previous_room = tuple(current_room)
 player_direction = "right"  
+PLAYER_ANIM_SPEED = 0.08  # seconds per frame when moving
+player_anim_frames = {}
+player_anim_state = "idle"
+player_anim_index = 0
+player_anim_timer = 0.0
 
 # weapon system
 bullets = []
@@ -110,7 +115,7 @@ upgrade_costs = {
     "weapon": {1: 30, 2: 50, 3: 75, 4: 100, 5: 150},
     "armor": {1: 25, 2: 45, 3: 70, 4: 95, 5: 130}
 }
-
+    
 #  simple image loading with caching and placeholders
 ASSETS_DIR = "assets"
 image_cache = {}
@@ -244,9 +249,54 @@ def load_smart_bg(level, row, col):
         return None
     return None
 
+def _load_player_sheet(filename):
+    """Slice a horizontal sprite sheet into frames scaled to the player rect."""
+    sheet_path = os.path.join(ASSETS_DIR, "characters", "New Folder With Items", filename)
+    try:
+        sheet = pygame.image.load(sheet_path).convert_alpha()
+    except Exception:
+        return []
+    
+    frame_height = sheet.get_height()
+    frame_width = frame_height  # sheets are square and laid out horizontally
+    cols = max(1, sheet.get_width() // frame_width)
+    frames = []
+    for i in range(cols):
+        frame_rect = pygame.Rect(i * frame_width, 0, frame_width, frame_height)
+        frame = sheet.subsurface(frame_rect).copy()
+        frame = pygame.transform.scale(frame, (player.width, player.height))
+        frames.append(frame)
+    return frames
+
+def _ensure_player_frames():
+    """Load and cache player idle/run animations (left/right)."""
+    global player_anim_frames
+    if player_anim_frames:
+        return player_anim_frames
+    
+    idle_frames = _load_player_sheet("Idle.png")
+    run_frames = _load_player_sheet("Run.png")
+    
+    # fall back to old single sprite if sheets fail to load
+    if not idle_frames:
+        idle_frames = [load_image("characters/player_right.png", player.width, player.height)]
+    if not run_frames:
+        run_frames = idle_frames
+    
+    player_anim_frames = {
+        "idle_right": idle_frames,
+        "idle_left": [pygame.transform.flip(f, True, False) for f in idle_frames],
+        "run_right": run_frames,
+        "run_left": [pygame.transform.flip(f, True, False) for f in run_frames],
+    }
+    return player_anim_frames
+
 def load_player_image(direction="right"):
     """Load player sprite based on direction (only left/right supported)."""
-    return load_image(f"characters/player_{direction}.png", 40, 50)
+    _ensure_player_frames()
+    key = f"idle_{direction}"
+    frames = player_anim_frames.get(key) or []
+    return frames[0] if frames else load_image(f"characters/player_{direction}.png", player.width, player.height)
 
 def load_object_image(obj_type, width, height):
     return load_image(f"objects/{obj_type}.png", width, height)
@@ -627,9 +677,9 @@ room_data = {
                  , "npcs": [],
                    "items": []},
     (1, 1, 0): {"name": "Subway Tunnels",    "objects": [
-                                                        {"type": "invisible", "x": 70, "y": 445, "width": 294, "height": 294},
-                                                        {"type": "invisible", "x": 440, "y": 445, "width": 294, "height": 294},
-                                                        {"type": "invisible", "x": 97, "y": 370, "width": 119, "height": 58}
+                                                        {"type": "invisible", "x": 70, "y": 445, "width": 294, "height": 150},
+                                                        {"type": "invisible", "x": 440, "y": 300, "width": 294, "height": 294},
+                                                        {"type": "invisible", "x": 97, "y": 360, "width": 119, "height": 58}
                                                      ],
                  "interactive": []
                  , "npcs": [],
@@ -1180,10 +1230,43 @@ def handle_damage_zones(dt):
   
         damage_timer = 0.0
 
-def draw_player(surface, player_rect):
-    """Draw player using directional sprite."""
-    img = load_player_image(player_direction)  
-    surface.blit(img, (player_rect.x, player_rect.y))
+def _player_frame_for_state(state, direction):
+    """Pick the correct frame list for the given state/direction."""
+    _ensure_player_frames()
+    key = f"{state}_{direction}"
+    frames = player_anim_frames.get(key)
+    if frames:
+        return frames
+    return player_anim_frames.get(f"idle_{direction}", [])
+
+def draw_player(surface, player_rect, dt, moving):
+    """Draw player using the new run/idle sprite sheets."""
+    global player_anim_state, player_anim_index, player_anim_timer
+    
+    direction = "left" if player_direction == "left" else "right"
+    state = "run" if moving else "idle"
+    frames = _player_frame_for_state(state, direction)
+    if not frames:
+        img = load_player_image(direction)
+        surface.blit(img, (player_rect.x, player_rect.y))
+        return
+    
+    if state != player_anim_state:
+        player_anim_state = state
+        player_anim_index = 0
+        player_anim_timer = 0.0
+    
+    if moving:
+        player_anim_timer += dt / 1000.0
+        if player_anim_timer >= PLAYER_ANIM_SPEED:
+            player_anim_timer = 0.0
+            player_anim_index = (player_anim_index + 1) % len(frames)
+    else:
+        player_anim_index = 0
+        player_anim_timer = 0.0
+    
+    frame = frames[player_anim_index % len(frames)]
+    surface.blit(frame, (player_rect.x, player_rect.y))
 
 def draw_player_pointer(surface, player_rect):
     """Draw a small pointer anchored to the player's left side."""
@@ -2531,7 +2614,8 @@ while running:
         pickup_items()
         
        
-        draw_player(screen, player)
+        player_moving = (abs(dx) > 0 or abs(dy) > 0)
+        draw_player(screen, player, dt, player_moving)
         draw_player_pointer(screen, player)
         
         
