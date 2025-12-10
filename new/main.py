@@ -677,9 +677,9 @@ room_data = {
                  , "npcs": [],
                    "items": []},
     (1, 1, 0): {"name": "Subway Tunnels",    "objects": [
-                                                        {"type": "invisible", "x": 70, "y": 445, "width": 294, "height": 150},
-                                                        {"type": "invisible", "x": 440, "y": 300, "width": 294, "height": 294},
-                                                        {"type": "invisible", "x": 97, "y": 360, "width": 119, "height": 58}
+                                                        {"type": "invisible", "x": 143, "y": 710, "width": 225, "height": 75},
+                                                        {"type": "invisible", "x": 465, "y": 710, "width": 225, "height": 75}, 
+                                                        {"type": "invisible", "x": 100, "y": 375, "width": 150, "height": 75}
                                                      ],
                  "interactive": []
                  , "npcs": [],
