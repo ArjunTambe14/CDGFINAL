@@ -60,7 +60,6 @@ player_anim_frames = {}
 player_anim_state = "idle"
 player_anim_index = 0
 player_anim_timer = 0.0
-
 # weapon system
 bullets = []
 ammo = 0  
@@ -70,6 +69,12 @@ is_reloading = False
 player_angle = 0.0
 shoot_cooldown = 0.0
 has_weapon = False  
+
+
+is_laser_weapon = False 
+laser_cooldown = 0.0  
+LASER_COOLDOWN_TIME = 0.1  
+REGULAR_COOLDOWN_TIME = 0.2  
 
 #  shop items
 blacksmith_items = {
@@ -107,8 +112,45 @@ blacksmith_items = {
         "cost": 30,
         "purchased": False,
         "type": "upgrade"
+    },  # ← ADD COMMA HERE
+    "cyber_weapon": {
+        "name": "Neon Blaster",
+        "description": "High-tech firearm",
+        "cost": 50,
+        "purchased": False,
+        "type": "weapon",
+        "cyber_only": True,
+        "damage_boost": 15
+    },
+    "cyber_armor": {
+        "name": "Energy Shield",
+        "description": "Advanced armor",
+        "cost": 40,
+        "purchased": False,
+        "type": "upgrade",
+        "cyber_only": True,
+        "health_boost": 50
+    },
+    "cyber_ammo": {
+        "name": "Energy Cells",
+        "description": "Ammo for blaster",
+        "cost": 20,
+        "purchased": False,
+        "type": "consumable",
+        "cyber_only": True,
+        "ammo_amount": 50
+    },
+    "cyber_potion": {
+        "name": "Nanite Heal",
+        "description": "Advanced healing",
+        "cost": 25,
+        "purchased": False,
+        "type": "consumable",
+        "cyber_only": True,
+        "heal_amount": 50
     }
 }
+
 
 #  upgrade system
 upgrade_costs = {
@@ -416,7 +458,7 @@ boss_phase = 1
 boss_thrown_axes = []  
 boss_throw_cooldown = 0
 
-#  UI & game state flags
+
 game_state = "main_menu" 
 on_home = True
 hud_visible = False
@@ -428,7 +470,8 @@ dialogue_index = 0
 upgrade_shop_visible = False
 in_combat = False
 combat_enemies = []
-give_herbs_active = False  
+give_herbs_active = False
+cyber_shop_visible = False  #
 
 #  messages
 message = ""
@@ -468,6 +511,18 @@ npc_dialogues = {
         "Herb Collector: As promised, here's the safe combination: 4231",
         "Herb Collector: The safe contains something valuable for your journey.",
         "Quest Updated: Safe combination received!"
+    ],(1, 0, 0, "cyber_guide"): [
+        "Cyber Guide: Welcome to the Neon City, time traveler!",
+        "Cyber Guide: This is the year 2187 - technology has evolved.",
+        "Cyber Guide: You'll need advanced weapons here. Visit the Alley Market.",
+        "Cyber Guide: They sell laser weapons with rapid fire rates.",
+        "Quest Updated: Buy a laser weapon from Neon Market"
+    ],
+    (1, 0, 1, "market_vendor"): [
+        "Market Vendor: Need some firepower, stranger?",
+        "Market Vendor: Our laser weapons fire 2x faster than old ballistic guns.",
+        "Market Vendor: They use energy cells instead of traditional ammo.",
+        "Market Vendor: The Neon Blaster is our best seller - 50 credits."
     ],
 }
 
@@ -657,26 +712,43 @@ room_data = {
     # ------------------------------------------------------
     # LEVEL 1  –  cyberpunk / neon city  (EMPTY SHELLS)
     # ------------------------------------------------------
-    (1, 0, 0): {"name": "Rooftop Hideout",   "objects": [{"type": "invisible", "x": 150,   "y": 585, "width": 500, "height": 65},
-                                                          {"type": "invisible", "x": 135,   "y": 275,   "width": 60,  "height": 370},
-                                                          {"type": "invisible", "x": 145,   "y": 275,   "width": 200, "height": 50},
-                                                          {"type": "invisible", "x": 450,   "y": 275,   "width": 200, "height": 50}, 
-                                                          {"type": "invisible", "x": 620, "y": 270,  "width": 40,  "height": 100},
-                                                           {"type": "invisible", "x": 620, "y": 500,  "width": 40,  "height": 100},
-                                                            {"type": "invisible", "x": 0,   "y": 0,   "width": 354, "height": 285},
-                                                             {"type": "invisible", "x": 460,   "y": 0,   "width": 354, "height": 285},
-                                                              {"type": "invisible", "x": 610,   "y": 520, "width": 400, "height": 100},
-                                                                {"type": "invisible", "x": 610,   "y": 300, "width": 400, "height": 100}], "interactive": [], "npcs": [], "items": []},
-    (1, 0, 1): {"name": "Alley Market",      "objects": [{"type": "invisible", "x": 0,   "y": 40, "width": 230, "height": 350},
-                                                         {"type": "invisible", "x": 0,   "y": 500, "width": 230, "height": 350}],
-                 "interactive": [], 
-                 "npcs": [], 
-                 "items": []},
-    (1, 0, 2): {"name": "Data Hub",          "objects": [],
+    (1, 0, 0): {
+        "name": "Rooftop Hideout",   
+        "objects": [{"type": "invisible", "x": 150,   "y": 585, "width": 500, "height": 65},
+                   {"type": "invisible", "x": 135,   "y": 275,   "width": 60,  "height": 370},
+                   {"type": "invisible", "x": 145,   "y": 275,   "width": 200, "height": 50},
+                   {"type": "invisible", "x": 450,   "y": 275,   "width": 200, "height": 50}, 
+                   {"type": "invisible", "x": 620, "y": 270,  "width": 40,  "height": 100},
+                   {"type": "invisible", "x": 620, "y": 500,  "width": 40,  "height": 100},
+                   {"type": "invisible", "x": 0,   "y": 0,   "width": 354, "height": 285},
+                   {"type": "invisible", "x": 460,   "y": 0,   "width": 354, "height": 285},
+                   {"type": "invisible", "x": 610,   "y": 520, "width": 400, "height": 100},
+                   {"type": "invisible", "x": 610,   "y": 300, "width": 400, "height": 100}], 
+        "interactive": [], 
+        "npcs": [
+            {"id": "herbcollector", "x": 400, "y": 500, "name": "Cyber Guide"},
+        ], 
+        "items": []
+    },
+  
+    (1, 0, 1): {
+    "name": "Alley Market", 
+    "objects": [
+        {"type": "invisible", "x": 0, "y": 40, "width": 230, "height": 350},
+        {"type": "invisible", "x": 0, "y": 500, "width": 230, "height": 350},
+        {"type": "shop", "x": 500, "y": 400, "width": 100, "height": 100}
+    ],
+    "interactive": [],
+    "npcs": [],
+    "items": []
+    },
+    (1, 0, 2): {"name": "Data Hub",          
+                "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 1, 0): {"name": "Subway Tunnels",    "objects": [
+    (1, 1, 0): {"name": "Subway Tunnels",    
+                "objects": [
                                                         {"type": "invisible", "x": 70, "y": 445, "width": 294, "height": 150},
                                                         {"type": "invisible", "x": 440, "y": 300, "width": 294, "height": 294},
                                                         {"type": "invisible", "x": 97, "y": 360, "width": 119, "height": 58}
@@ -684,23 +756,28 @@ room_data = {
                  "interactive": []
                  , "npcs": [],
                  "items": []},
-    (1, 1, 1): {"name": "Neon Streets",      "objects": [],
+    (1, 1, 1): {"name": "Neon Streets",      
+                "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 1, 2): {"name": "Factory Exterior",  "objects": [],
+    (1, 1, 2): {"name": "Factory Exterior",  
+                "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 2, 0): {"name": "Core Reactor Room", "objects": [],
+    (1, 2, 0): {"name": "Core Reactor Room", 
+                "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 2, 1): {"name": "Time Gateway",   "objects": [],
+    (1, 2, 1): {"name": "Time Gateway",   
+                "objects": [],
                  "interactive": []
                  , "npcs": [],
                    "items": []},
-    (1, 2, 2): {"name": "AI Control Room",      "objects": [], 
+    (1, 2, 2): {"name": "AI Control Room",      
+                "objects": [], 
                 "interactive": []
                 , "npcs": [],
                   "items": []},
@@ -836,12 +913,57 @@ def throw_axe():
         })
         set_message("Boss throws an axe!", (255, 100, 100), 1.0)
 def enter_level_2():
-    """Warp player to Level-2 Rooftop Hideout, centre of room."""
-    current_room[0] = 1          # level 2
-    current_room[1] = 0          # row 0  -> Rooftop Hideout
-    current_room[2] = 0          # col 0
+    """Warp player to Level-2 Rooftop Hideout, reset game state for level 2."""
+    global current_room, player, health, max_health, weapon_level, armor_level
+    global has_weapon, ammo, max_ammo, inventory, quests
+    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
+    global boss_defeated, boss_drop_collected
+    
+    current_room[0] = 1          
+    current_room[1] = 0          
+    current_room[2] = 0          
     player.center = (ROOM_WIDTH // 2, ROOM_HEIGHT // 2)
-    set_message("Welcome to Level 2 – The Neon City!", (0, 255, 255), 4.0)
+   
+    health = 100
+    max_health = 100
+    
+    has_weapon = False  
+    ammo = 0
+    max_ammo = 40  
+    weapon_level = 1  
+    
+
+
+    keep_gold = inventory["Gold"] 
+    inventory = {
+        "Gold": keep_gold,
+        "Health Potions": 1,  
+        "Herbs": 0,
+        "Keys": 0,
+        "Time Shards": 0
+    }
+    
+    collected_gold.clear()
+    collected_herbs.clear()
+    collected_potions.clear()
+    collected_keys.clear()
+    collected_timeshards.clear()
+    
+    boss_defeated = False
+    boss_drop_collected = False
+    
+
+    quests.clear()
+    quests.update({
+        "explore_neon_city": {"active": True, "complete": False, "description": "Explore the Neon City"},
+        "buy_laser_weapon": {"active": True, "complete": False, "description": "Buy a laser weapon from the Neon Market (50 Credits)"},
+        "upgrade_laser": {"active": False, "complete": False, "description": "Upgrade your laser weapon"},
+        "upgrade_energy_shield": {"active": False, "complete": False, "description": "Upgrade your energy shield"},
+        "defeat_cyber_boss": {"active": False, "complete": False, "description": "Defeat the Cyber Security AI"},
+        "find_shard_2": {"active": False, "complete": False, "description": "Find Second Time Shard"},
+    })
+    
+    set_message("Welcome to Level 2 – The Neon City! Good luck!", (0, 255, 255), 5.0)
 def update_thrown_axes(dt_sec):
     """Update positions of thrown axes and check for collisions."""
     global boss_thrown_axes, health
@@ -985,12 +1107,13 @@ def collect_boss_drops():
 
 #  weapon and shooting system
 def shoot_bullet():
-    """Shoot a bullet towards the mouse position."""
-    global ammo, shoot_cooldown, is_reloading
+    global ammo, shoot_cooldown, is_reloading, is_laser_weapon
     
     if not has_weapon:
         set_message("You need a weapon! Visit the blacksmith.", (255, 200, 0), 2.0)
         return False
+    
+    current_cooldown = LASER_COOLDOWN_TIME if is_laser_weapon else REGULAR_COOLDOWN_TIME
         
     if not is_reloading and ammo > 0 and shoot_cooldown <= 0:
         dx = mouse_x - player.centerx
@@ -998,25 +1121,48 @@ def shoot_bullet():
         dist = math.sqrt(dx*dx + dy*dy)
         
         if dist > 0:
-            bullet_speed = 15.0
+            bullet_speed = 20.0 if is_laser_weapon else 15.0
             damage = 20 + (weapon_level * 5)  
+            if is_laser_weapon:
+                damage += 15
+            
+            if is_laser_weapon:
+                bullet_color_main = (0, 255, 255)
+                bullet_color_inner = (0, 200, 255)
+                bullet_radius = 6
+            else:
+                bullet_color_main = (255, 255, 0)
+                bullet_color_inner = (255, 200, 0)
+                bullet_radius = 4
             
             bullets.append({
                 "x": float(player.centerx),
                 "y": float(player.centery),
                 "dx": (dx / dist) * bullet_speed,
                 "dy": (dy / dist) * bullet_speed,
-                "damage": damage
+                "damage": damage,
+                "is_laser": is_laser_weapon,
+                "color_main": bullet_color_main,
+                "color_inner": bullet_color_inner,
+                "radius": bullet_radius
             })
             
             ammo -= 1
-            shoot_cooldown = 0.2
+            shoot_cooldown = current_cooldown
+            
+            if is_laser_weapon:
+                set_message("Pew! Laser!", (0, 255, 255), 0.3)
+            else:
+                set_message("Pew!", (255, 255, 0), 0.5)
                 
             return True
-    
-    
+
+
     if ammo == 0 and has_weapon and not is_reloading:
-        set_message("Out of ammo! Buy more from the blacksmith.", (255, 200, 0), 1.5)
+        if is_laser_weapon:
+            set_message("Energy cells depleted! Buy more from Neon Market.", (255, 100, 255), 1.5)
+        else:
+            set_message("Out of ammo! Buy more from the blacksmith.", (255, 200, 0), 1.5)
     
     return False
 
@@ -1064,10 +1210,26 @@ def update_bullets(dt):
         bullets.pop(i)
 
 def draw_bullets(surface):
-    """Draw all active bullets."""
+    
     for bullet in bullets:
-        pygame.draw.circle(surface, (255, 255, 0), (int(bullet["x"]), int(bullet["y"])), 4)
-        pygame.draw.circle(surface, (255, 200, 0), (int(bullet["x"]), int(bullet["y"])), 2)
+        color_main = bullet.get("color_main", (255, 255, 0))
+        color_inner = bullet.get("color_inner", (255, 200, 0))
+        radius = bullet.get("radius", 4)
+        
+        pygame.draw.circle(surface, color_main, (int(bullet["x"]), int(bullet["y"])), radius)
+        pygame.draw.circle(surface, color_inner, (int(bullet["x"]), int(bullet["y"])), radius-2)
+        
+        if bullet.get("is_laser", False):
+            trail_length = 15
+            for i in range(1, 4):
+                trail_x = bullet["x"] - bullet["dx"] * (i * 0.3)
+                trail_y = bullet["y"] - bullet["dy"] * (i * 0.3)
+                trail_alpha = 150 - (i * 50)
+                trail_color = (0, 200, 255, trail_alpha)
+                
+                trail_surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+                pygame.draw.circle(trail_surf, trail_color, (radius, radius), max(1, radius-i))
+                surface.blit(trail_surf, (int(trail_x)-radius, int(trail_y)-radius))
 
 def draw_weapon_hud(surface):
     """Draw weapon ammo and reload status."""
@@ -1099,7 +1261,165 @@ def draw_weapon_hud(surface):
             armor_text = small_font.render(f"Armor Lvl: {armor_level}", True, (200, 255, 200))
             surface.blit(armor_text, (10, ROOM_HEIGHT - 60))
 
-#  PLAYER DEATH AND RESPAWN 
+def draw_cyber_shop(surface):
+    """Draw the cyberpunk shop interface."""
+    if not cyber_shop_visible:
+        return
+    
+    overlay = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 220))
+    surface.blit(overlay, (0, 0))
+    
+    # Main shop window
+    shop_rect = pygame.Rect(50, 50, ROOM_WIDTH - 100, ROOM_HEIGHT - 100)
+    pygame.draw.rect(surface, (10, 10, 30), shop_rect)
+    pygame.draw.rect(surface, (0, 255, 255), shop_rect, 4)
+    
+    # Title
+    title = title_font.render("NEON MARKET", True, (0, 255, 255))
+    surface.blit(title, (ROOM_WIDTH//2 - title.get_width()//2, 70))
+    
+    # Gold display
+    gold_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 80, shop_rect.width - 40, 40)
+    pygame.draw.rect(surface, (20, 20, 40), gold_rect)
+    pygame.draw.rect(surface, (255, 215, 0), gold_rect, 2)
+    
+    gold_text = font.render(f"Credits: {inventory['Gold']}", True, (255, 215, 0))
+    surface.blit(gold_text, (gold_rect.centerx - gold_text.get_width()//2, gold_rect.centery - gold_text.get_height()//2))
+    
+    # Player stats
+    stats_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 130, shop_rect.width - 40, 60)
+    pygame.draw.rect(surface, (20, 30, 50), stats_rect)
+    pygame.draw.rect(surface, (100, 150, 255), stats_rect, 2)
+    
+    cyber_damage = 15 if blacksmith_items['cyber_weapon']['purchased'] else 0
+    cyber_health = 50 if blacksmith_items['cyber_armor']['purchased'] else 0
+    cyber_ammo_cap = 50 if blacksmith_items['cyber_weapon']['purchased'] else 0
+    
+    stats_lines = [
+        f"Weapon Damage: {20 + (weapon_level * 5) + cyber_damage}",
+        f"Max Health: {max_health + cyber_health} | Current: {health}",
+        f"Ammo: {ammo}/{max_ammo + cyber_ammo_cap}"
+    ]
+    
+    for i, line in enumerate(stats_lines):
+        stat_text = small_font.render(line, True, (180, 220, 255))
+        surface.blit(stat_text, (stats_rect.x + 10, stats_rect.y + 5 + i * 20))
+    
+    # Shop items
+    items_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 210, shop_rect.width - 40, shop_rect.height - 280)
+    pygame.draw.rect(surface, (30, 30, 60), items_rect)
+    pygame.draw.rect(surface, (0, 150, 200), items_rect, 2)
+    
+    # Cyber items
+    cyber_items = [
+        ("cyber_weapon", "Neon Blaster", "High-tech firearm", 50, "+15 Damage, +50 Ammo Cap"),
+        ("cyber_armor", "Energy Shield", "Advanced armor", 40, "+50 Max Health"),
+        ("cyber_ammo", "Energy Cells", "Ammo pack", 20, "+50 Ammo"),
+        ("cyber_potion", "Nanite Heal", "Advanced healing", 25, "+50 Health")
+    ]
+    
+    item_buttons = []
+    for i, (item_id, name, desc, cost, bonus) in enumerate(cyber_items):
+        row = i // 2
+        col = i % 2
+        item_x = items_rect.x + 20 + col * (items_rect.width // 2)
+        item_y = items_rect.y + 20 + row * 120
+        
+        item_bg = pygame.Rect(item_x, item_y, items_rect.width // 2 - 30, 110)
+        
+        item = blacksmith_items[item_id]
+        if item.get("purchased", False):
+            bg_color = (0, 40, 40)
+            border_color = (0, 200, 200)
+        elif inventory["Gold"] >= cost:
+            bg_color = (30, 30, 50)
+            border_color = (0, 150, 200)
+        else:
+            bg_color = (40, 30, 40)
+            border_color = (200, 0, 100)
+        
+        pygame.draw.rect(surface, bg_color, item_bg)
+        pygame.draw.rect(surface, border_color, item_bg, 3)
+        
+        # Item info
+        name_text = font.render(name, True, (255, 255, 255))
+        desc_text = small_font.render(desc, True, (200, 200, 255))
+        cost_text = font.render(f"{cost} Cr", True, (255, 215, 0))
+        bonus_text = small_font.render(bonus, True, (0, 255, 150))
+        
+        surface.blit(name_text, (item_bg.x + 10, item_bg.y + 10))
+        surface.blit(desc_text, (item_bg.x + 10, item_bg.y + 35))
+        surface.blit(cost_text, (item_bg.x + item_bg.width - 80, item_bg.y + 10))
+        surface.blit(bonus_text, (item_bg.x + 10, item_bg.y + 55))
+        
+        # Purchase button
+        if not item.get("purchased", False):
+            button_rect = pygame.Rect(item_bg.x + item_bg.width - 90, item_bg.y + 70, 80, 30)
+            if inventory["Gold"] >= cost:
+                pygame.draw.rect(surface, (0, 80, 80), button_rect)
+                pygame.draw.rect(surface, (0, 200, 200), button_rect, 2)
+                button_text = small_font.render("BUY", True, (200, 255, 255))
+            else:
+                pygame.draw.rect(surface, (80, 0, 0), button_rect)
+                pygame.draw.rect(surface, (200, 0, 100), button_rect, 2)
+                button_text = small_font.render("BUY", True, (255, 200, 200))
+            
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+            item_buttons.append((button_rect, item_id))
+        else:
+            owned_text = font.render("OWNED", True, (0, 255, 0))
+            surface.blit(owned_text, (item_bg.x + item_bg.width - 90, item_bg.y + 70))
+    
+    # Close button
+    close_rect = pygame.Rect(shop_rect.centerx - 60, shop_rect.bottom - 50, 120, 40)
+    pygame.draw.rect(surface, (100, 0, 100), close_rect)
+    pygame.draw.rect(surface, (255, 0, 255), close_rect, 3)
+    close_text = font.render("EXIT", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, close_rect.centery - close_text.get_height()//2))
+    
+    return item_buttons, close_rect
+def handle_cyber_purchase(item_id):
+    global ammo, max_ammo, health, max_health, inventory, weapon_level, has_weapon, is_laser_weapon
+    
+    item = blacksmith_items[item_id]
+    
+    if item.get("purchased", False):
+        set_message(f"You already own {item['name']}!", (255, 200, 0), 2.0)
+        return False
+    
+    if inventory["Gold"] < item["cost"]:
+        set_message(f"Not enough credits for {item['name']}!", (255, 0, 0), 2.0)
+        return False
+    
+    inventory["Gold"] -= item["cost"]
+    item["purchased"] = True
+    
+    if item_id == "cyber_weapon":
+        has_weapon = True
+        is_laser_weapon = True
+        max_ammo += 50
+        ammo = max_ammo
+        weapon_level += 1
+        quests["buy_laser_weapon"]["complete"] = True
+        quests["upgrade_laser"]["active"] = True
+        set_message(f"Purchased {item['name']}! +15 Damage, +50 Ammo, Faster Fire Rate!", (0, 255, 255), 3.0)
+    
+    elif item_id == "cyber_armor":
+        max_health += 50
+        health = max_health
+        quests["upgrade_energy_shield"]["active"] = True
+        set_message(f"Purchased {item['name']}! +50 Max Health", (0, 255, 255), 3.0)
+    
+    elif item_id == "cyber_ammo":
+        ammo = min(max_ammo, ammo + 50)
+        set_message(f"Purchased {item['name']}! +50 Energy Cells", (0, 255, 255), 2.0)
+    
+    elif item_id == "cyber_potion":
+        health = min(max_health, health + 50)
+        set_message(f"Used {item['name']}! +50 Health", (0, 255, 255), 2.0)
+    
+    return True
 def respawn_player():
     """Handle player respawn with penalties."""
     global health, max_health, weapon_level, armor_level, player, current_room, ammo, is_reloading, reload_time
@@ -1163,7 +1483,14 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
             surface.blit(label, (x + 5, y + 5))
         
         return rect
+    elif obj_type == "shop":
+        img = load_object_image("shop", width, height)
+        if img:
+            surface.blit(img, (x, y))
         
+        rect = pygame.Rect(x, y, width, height)
+        interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
+        return rect    
 
     img = load_object_image(obj_type, width, height)
     surface.blit(img, (x, y))
@@ -1181,6 +1508,7 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
             colliders.append(rect)
     
     return rect
+
 
 def handle_damage_zones(dt):
     """Check if player is in damage zones and apply damage."""
@@ -2237,7 +2565,7 @@ def set_message(text, color, duration):
 def handle_interaction():
     """Handle F key interactions."""
     global dialogue_active, current_dialogue, dialogue_index, upgrade_shop_visible
-    global safe_visible, safe_input, safe_unlocked, maze_visible
+    global safe_visible, safe_input, safe_unlocked, maze_visible, cyber_shop_visible
     
     room_key = tuple(current_room)
     
@@ -2328,7 +2656,12 @@ def handle_interaction():
                 else:
                     need = 2 - inventory["Keys"]
                     set_message(f"You need {need} more key(s) to activate the portal!", (255, 200, 0), 2.0)
-
+   
+    if room_key == (1, 0, 1):  
+        for inter_obj in interactive_objects:
+            if inter_obj["type"] == "shop" and player.colliderect(inter_obj["rect"].inflate(50, 50)):
+                cyber_shop_visible = True
+                return
 
 def give_herbs_to_collector():
     """Handle G key to give herbs to the herb collector."""
@@ -2435,6 +2768,15 @@ while running:
                 
                 if close_rect.collidepoint(mouse_pos):
                     upgrade_shop_visible = False
+            elif game_state == "playing" and cyber_shop_visible:
+                item_buttons, close_rect = draw_cyber_shop(screen)
+                
+                for button_rect, item_id in item_buttons:
+                    if button_rect.collidepoint(mouse_pos):
+                        handle_cyber_purchase(item_id)
+                
+                if close_rect.collidepoint(mouse_pos):
+                    cyber_shop_visible = False
             
             elif game_state == "playing" and safe_visible:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
@@ -2482,6 +2824,9 @@ while running:
                 elif upgrade_shop_visible:
                     if event.key == pygame.K_ESCAPE:
                         upgrade_shop_visible = False
+                elif cyber_shop_visible:
+                    if event.key == pygame.K_ESCAPE:
+                        cyber_shop_visible = False
                 
                 elif event.key == pygame.K_e:
                     hud_visible = not hud_visible
@@ -2632,6 +2977,7 @@ while running:
         draw_dialogue(screen)
         draw_blacksmith_shop(screen)
         draw_weapon_hud(screen)
+        draw_cyber_shop(screen)
         
         if DEV_MODE:
             coord_surf = small_font.render(f"{player.x:.0f}, {player.y:.0f}", True, (255, 255, 0))
