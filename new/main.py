@@ -959,6 +959,21 @@ waterfall_challenge_active = False
 waterfall_challenge_complete = False
 waterfall_next_spawn_time = 0.0
 
+# Waterfall Cave - Code Puzzle
+waterfall_code_puzzle_visible = False
+waterfall_code_input = ""
+waterfall_code_correct = "landa"
+waterfall_code_solved = False
+waterfall_code_tile_rect = None
+waterfall_maze_visible = False
+waterfall_maze_timer = 0.0
+waterfall_maze_solution = [(400, 350), (400, 450), (500, 450), (500, 300), (300, 300), (300, 150), (600, 150)]
+waterfall_maze_player_pos = (400, 350)
+
+# Temple Code Reward
+temple_code_obtained = False
+temple_code = "landa"
+
 # Temporal Altar - Ritual System
 temporal_altar_activated = False
 kael_origin_countdown = 30.0
@@ -1649,7 +1664,7 @@ room_data = {
     # Level 3: Ancient Ruins (Lost Civilization)
     (2, 2, 0): {"name": "Jungle Path",            "objects": [], "interactive": [], "npcs": [], "items": []},
     (2, 2, 1): {"name": "Forgotten City",         "objects": [], "interactive": [], "npcs": [], "items": []},
-    (2, 2, 2): {"name": "Waterfall Cave",         "objects": [], "interactive": [], "npcs": [], "items": []},
+    (2, 2, 2): {"name": "Waterfall Cave",         "objects": [], "interactive": [{"type": "waterfall_code", "x": 250, "y": 450, "width": 100, "height": 80}], "npcs": [], "items": []},
 
     (2, 1, 0): {"name": "Lava Chambers",          "objects": [], "interactive": [], "npcs": [], "items": []},
     (2, 1, 1): {"name": "Ruins Plaza",           "objects": [], "interactive": [
@@ -2222,6 +2237,8 @@ def enter_level_3():
     global echoes_miniboss, echoes_boss_defeated, echoes_arena_locked, echoes_rewards_dropped
     global kael_boss, kael_defeated, kael_phase
     global kael_origin_revealed, timeline_restored, level3_complete
+    global waterfall_code_puzzle_visible, waterfall_code_input, waterfall_code_solved
+    global waterfall_maze_visible, temple_code_obtained
     try:
         current_room_coords[0] = 2
         current_room_coords[1] = 0
@@ -2260,6 +2277,10 @@ def enter_level_3():
         temple_puzzle_attempts = 0
         temple_puzzle_solved = False
         temple_gate_unlocked = False
+        waterfall_code_puzzle_visible = False
+        waterfall_code_input = ""
+        waterfall_code_solved = False
+        waterfall_maze_visible = False
         jungle_trap_timer = 0.0
         jungle_traps_active = False
         jungle_cleared = False
@@ -3522,6 +3543,15 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         rect = pygame.Rect(x, y, width, height)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
+    if obj_type == "waterfall_code":
+        rect = pygame.Rect(x, y, width, height)
+        # Draw a visible code terminal/lock
+        pygame.draw.rect(surface, (40, 60, 100), rect)
+        pygame.draw.rect(surface, (100, 150, 255), rect, 3)
+        label = small_font.render("CODE LOCK", True, (100, 200, 255))
+        surface.blit(label, (rect.centerx - label.get_width() // 2, rect.centery - 10))
+        interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
+        return rect
     if obj_type == "temple_shop":
         rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(surface, (60, 40, 20), rect)
@@ -4199,10 +4229,10 @@ def update_echoes_freeze_and_laser(dt):
     if echoes_laser_active:
         echoes_laser_timer -= dt_sec * speed_factor
         
-        # Laser fires and deals 25 damage
+        # Laser fires and deals 12 damage
         if echoes_laser_timer <= 0:
-            health = max(0, health - 25)
-            set_message("LASER HIT! 25 damage!", (255, 0, 0), 1.0)
+            health = max(0, health - 12)
+            set_message("LASER HIT! 12 damage!", (255, 0, 0), 1.0)
             echoes_laser_timer = 1.0  # Reset timer to fire again in 1 second
     
     # End freeze effect when timer expires (2 seconds)
@@ -4246,89 +4276,18 @@ def draw_echoes_miniboss(surface):
 
 def init_waterfall_challenge():
     """Initialize the Waterfall Cave timing-based platform challenge."""
-    global waterfall_platforms, waterfall_timer, waterfall_challenge_active, waterfall_challenge_complete, waterfall_next_spawn_time
-    if waterfall_challenge_complete:
-        return
-    waterfall_challenge_active = True
-    waterfall_timer = 0.0
-    waterfall_next_spawn_time = 1.5
-    waterfall_platforms = []
-    set_message("Navigate the falling platforms to reach the sanctuary.", (150, 200, 255), 3.0)
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
 
 def update_waterfall_challenge(dt):
     """Update Waterfall Cave platform challenge."""
-    global waterfall_timer, waterfall_next_spawn_time, waterfall_platforms, waterfall_challenge_active, waterfall_challenge_complete, player_rect
-    room_key = tuple(current_room_coords)
-    if room_key != (2, 2, 2) or not waterfall_challenge_active or waterfall_challenge_complete:
-        return
-    
-    dt_sec = dt / 1000.0
-    waterfall_timer += dt_sec
-    waterfall_next_spawn_time -= dt_sec
-    
-    # Spawn new platform every 1.5 seconds
-    if waterfall_next_spawn_time <= 0:
-        waterfall_next_spawn_time = 2.0
-        # Randomly position platform
-        platform_x = random.randint(100, 650)
-        platform_y = 100
-        waterfall_platforms.append({
-            "x": platform_x,
-            "y": platform_y,
-            "width": 100,
-            "height": 20,
-            "fall_time": 0.0,
-            "fall_speed": 200  # pixels per second
-        })
-        set_message("Platform spawning!", (100, 180, 255), 0.5)
-    
-    # Update platforms - move them down
-    platforms_to_remove = []
-    for i, platform in enumerate(waterfall_platforms):
-        platform["y"] += platform["fall_speed"] * dt_sec
-        
-        # Check if player is on platform
-        platform_rect = pygame.Rect(platform["x"], platform["y"], platform["width"], platform["height"])
-        if player_rect.colliderect(platform_rect):
-            # Player is on platform - stop it
-            platform["fall_speed"] = 0
-            player_rect.bottom = platform_rect.top
-        elif player_rect.bottom > platform_rect.top and player_rect.bottom < platform_rect.bottom:
-            # Player might be on platform
-            platform["fall_speed"] = 0
-            player_rect.bottom = platform_rect.top
-        
-        # Remove platforms that fall off screen
-        if platform["y"] > SCREEN_HEIGHT + 50:
-            platforms_to_remove.append(i)
-    
-    for i in sorted(platforms_to_remove, reverse=True):
-        if 0 <= i < len(waterfall_platforms):
-            waterfall_platforms.pop(i)
-    
-    # Check if player reached the top (completion)
-    if player_rect.top < 100:
-        waterfall_challenge_complete = True
-        waterfall_challenge_active = False
-        inventory["Gold"] += 50
-        set_message("You navigated the cascade! +50 Gold earned.", (200, 255, 100), 3.0)
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
 
 def draw_waterfall_challenge(surface):
     """Draw Waterfall Cave platform challenge."""
-    room_key = tuple(current_room_coords)
-    if room_key != (2, 2, 2) or not waterfall_challenge_active:
-        return
-    
-    # Draw platforms
-    for platform in waterfall_platforms:
-        rect = pygame.Rect(platform["x"], platform["y"], platform["width"], platform["height"])
-        pygame.draw.rect(surface, (100, 200, 255), rect)
-        pygame.draw.rect(surface, (50, 150, 200), rect, 2)
-    
-    # Draw instruction text
-    font_small = pygame.font.SysFont(None, 24)
-    text = font_small.render("Jump to the platforms! Reach the top!", True, (150, 200, 255))
-    surface.blit(text, (SCREEN_WIDTH // 2 - 150, 20))
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
 
 def spawn_gorlock_boss():
     """Spawn Gorlock the Time Eater in the Forgotten City."""
@@ -4460,7 +4419,7 @@ def update_gorlock_boss(dt):
             # Check hit after swing completes
             mace_rect = calculate_gorlock_mace_rect()
             if player_rect.colliderect(mace_rect):
-                damage = 45
+                damage = 25
                 health = max(0, health - damage)
                 set_message(f"Gorlock's mace hit for {damage} damage!", (255, 100, 80), 1.2)
     
@@ -4517,7 +4476,7 @@ def throw_gorlock_mace(dx, dy, dist):
         "vy": (dy / dist) * speed,
         "angle": 0,
         "lifetime": 8.0,
-        "damage": 30
+        "damage": 15
     })
     set_message("Gorlock hurls his mace!", (255, 120, 80), 1.0)
 
@@ -4666,7 +4625,7 @@ def update_kael_boss(dt):
                 "dx": (ddx / d) * speed,
                 "dy": (ddy / d) * speed,
                 "radius": 6 + kael_phase,
-                "damage": 10 + kael_phase * 2,
+                "damage": 6 + kael_phase,
                 "hostile": True,
             })
 
@@ -5242,12 +5201,14 @@ def reset_temple_puzzle(randomize=True):
 def check_temple_puzzle():
     """Check the temple puzzle solution."""
     global temple_puzzle_attempts, temple_puzzle_solved, temple_gate_unlocked, temple_puzzle_visible, health
+    global temple_code_obtained
     temple_puzzle_attempts += 1
     if temple_puzzle_tiles == temple_puzzle_solution:
         temple_puzzle_solved = True
         temple_gate_unlocked = True
         temple_puzzle_visible = False
-        set_message("The gate unlocks!", (180, 255, 180), 2.5)
+        temple_code_obtained = True
+        set_message("The gate unlocks! Code obtained: LANDA", (180, 255, 180), 3.0)
     else:
         reset_temple_puzzle(randomize=True)
         health = max(0, health - 5)
@@ -5261,6 +5222,137 @@ def handle_temple_puzzle_click(pos):
         if rect.collidepoint(pos):
             temple_puzzle_tiles[i] = (temple_puzzle_tiles[i] + 1) % 4
             return
+
+def draw_waterfall_code_puzzle(surface):
+    """Draw the waterfall code input interface."""
+    if not waterfall_code_puzzle_visible:
+        return
+    
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 220))
+    surface.blit(overlay, (0, 0))
+    
+    # Main dialog box
+    box_w = 600
+    box_h = 400
+    box_x = (SCREEN_WIDTH - box_w) // 2
+    box_y = (SCREEN_HEIGHT - box_h) // 2
+    box = pygame.Rect(box_x, box_y, box_w, box_h)
+    
+    # Draw box background
+    pygame.draw.rect(surface, (20, 50, 80), box)
+    pygame.draw.rect(surface, (100, 180, 255), box, 8)
+    
+    # Title
+    title = title_font.render("CODE LOCK", True, (100, 220, 255))
+    title_rect = title.get_rect(center=(box.centerx, box.y + 50))
+    surface.blit(title, title_rect)
+    
+    # Prompt
+    prompt = font.render("Enter the code:", True, (200, 220, 255))
+    surface.blit(prompt, (box.x + 50, box.y + 130))
+    
+    # Input box - LARGE
+    input_box = pygame.Rect(box.x + 50, box.y + 180, box.width - 100, 100)
+    pygame.draw.rect(surface, (0, 20, 40), input_box)
+    pygame.draw.rect(surface, (100, 220, 255), input_box, 6)
+    
+    # Display the typed text in LARGE font
+    input_display = waterfall_code_input.upper() if waterfall_code_input else ""
+    if input_display:
+        # Use larger font for visible text
+        big_font = pygame.font.SysFont(None, 60)
+        input_text = big_font.render(input_display, True, (100, 255, 200))
+        text_rect = input_text.get_rect(center=(input_box.centerx, input_box.centery))
+        surface.blit(input_text, text_rect)
+    else:
+        # Show placeholder
+        placeholder = font.render("(type code here)", True, (100, 150, 180))
+        placeholder_rect = placeholder.get_rect(center=(input_box.centerx, input_box.centery))
+        surface.blit(placeholder, placeholder_rect)
+    
+    # Instructions
+    instr1 = small_font.render("Type the code 'LANDA' and press ENTER", True, (200, 220, 200))
+    surface.blit(instr1, (box.x + 50, box.y + 310))
+    
+    instr2 = small_font.render("Press ESC to cancel", True, (180, 200, 200))
+    surface.blit(instr2, (box.x + 50, box.y + 345))
+
+def handle_waterfall_code_input(key):
+    """Handle keyboard input for waterfall code."""
+    global waterfall_code_input, waterfall_code_puzzle_visible, waterfall_code_solved, waterfall_maze_visible
+    
+    if not waterfall_code_puzzle_visible:
+        return
+    
+    # Handle escape
+    if key == pygame.K_ESCAPE:
+        waterfall_code_puzzle_visible = False
+        waterfall_code_input = ""
+        return
+    
+    # Handle enter
+    if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
+        if waterfall_code_input.lower() == waterfall_code_correct.lower():
+            waterfall_code_solved = True
+            waterfall_code_puzzle_visible = False
+            waterfall_maze_visible = True
+            set_message("Code accepted! Navigate the maze.", (100, 255, 200), 3.0)
+            waterfall_code_input = ""
+        else:
+            set_message("Wrong code. Try again.", (255, 100, 100), 2.0)
+            waterfall_code_input = ""
+        return
+    
+    # Handle backspace
+    if key == pygame.K_BACKSPACE:
+        waterfall_code_input = waterfall_code_input[:-1]
+        return
+    
+    # Handle letter input - direct keycode check
+    if key >= pygame.K_a and key <= pygame.K_z:
+        # Lowercase letter
+        if len(waterfall_code_input) < 10:
+            waterfall_code_input += chr(key)
+
+def draw_waterfall_maze(surface):
+    """Draw the waterfall cave maze challenge."""
+    if not waterfall_maze_visible:
+        return
+    
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    surface.blit(overlay, (0, 0))
+    
+    # Draw maze paths (simplified)
+    maze_start = (400, 350)
+    maze_end = (600, 150)
+    
+    pygame.draw.circle(surface, (100, 255, 100), maze_start, 15)
+    pygame.draw.circle(surface, (255, 100, 100), maze_end, 15)
+    
+    # Draw solution path
+    for i in range(len(waterfall_maze_solution) - 1):
+        p1 = waterfall_maze_solution[i]
+        p2 = waterfall_maze_solution[i + 1]
+        pygame.draw.line(surface, (100, 150, 255), p1, p2, 8)
+    
+    # Draw waypoints
+    for i, point in enumerate(waterfall_maze_solution):
+        color = (100, 200, 255) if i < 4 else (255, 150, 100)
+        pygame.draw.circle(surface, color, point, 8)
+        pygame.draw.circle(surface, (255, 255, 255), point, 8, 2)
+    
+    instruction = small_font.render("Follow the blue path. Press SPACE to complete.", True, (200, 255, 200))
+    surface.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, 50))
+
+def handle_waterfall_maze_completion():
+    """Reward player for completing maze."""
+    global waterfall_maze_visible, waterfall_code_solved, inventory
+    waterfall_maze_visible = False
+    inventory["Herbs"] = inventory.get("Herbs", 0) + 3
+    set_message("Maze complete! +3 Herbs obtained!", (100, 255, 150), 3.0)
+
 
 def draw_blacksmith_shop(surface):
     """Draw the improved blacksmith shop interface."""
@@ -6817,6 +6909,13 @@ def handle_interaction():
                 else:
                     set_message("The gate is already open.", (200, 200, 200), 1.5)
                 return
+            elif obj_type == "waterfall_code" and room_key == (2, 2, 2):
+                if not waterfall_code_solved:
+                    waterfall_code_puzzle_visible = True
+                    set_message("Enter the code from the Temple Entrance.", (150, 200, 255), 2.5)
+                else:
+                    set_message("The lock is already open.", (200, 200, 200), 1.5)
+                return
             elif obj_type == "crafting_table" and room_key == (2, 1, 1):
                 if crafting_ready_confirmed:
                     set_message("You've already confirmed your readiness.", (200, 200, 200), 1.5)
@@ -7109,6 +7208,15 @@ while running:
                 if cutscene_active:
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
                         advance_cutscene_line()
+                    continue
+                if waterfall_code_puzzle_visible:
+                    handle_waterfall_code_input(event.key)
+                    continue
+                if waterfall_maze_visible:
+                    if event.key == pygame.K_SPACE:
+                        handle_waterfall_maze_completion()
+                    elif event.key == pygame.K_ESCAPE:
+                        waterfall_maze_visible = False
                     continue
                 if temple_puzzle_visible:
                     if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
@@ -7421,7 +7529,9 @@ while running:
         draw_blacksmith_shop(screen)
         draw_cyber_shop(screen)
         draw_temple_shop(screen)
-        draw_enhanced_weapon_hud(screen)  
+        draw_enhanced_weapon_hud(screen)
+        draw_waterfall_code_puzzle(screen)
+        draw_waterfall_maze(screen)
 
 
         if hud_visible:
