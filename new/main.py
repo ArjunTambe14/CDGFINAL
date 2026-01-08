@@ -4842,6 +4842,19 @@ def draw_level3_room_extras(surface, room_key):
 def handle_room_entry(new_room, old_room):
     """Trigger one-time events when entering Level 3 rooms."""
     global kael_origin_revealed, echoes_miniboss, echoes_boss_defeated, kael_boss
+    global gorlock_taunt_active, gorlock_taunt_timer, player_stat_multiplier, player_move_speed
+    
+    # Clear Gorlock taunt state when leaving his room
+    if old_room == (2, 2, 1) and new_room != (2, 2, 1):
+        try:
+            gorlock_taunt_active = False
+            gorlock_taunt_timer = 0.0
+            # Restore base stats when leaving taunt room
+            player_stat_multiplier = player_base_stat_multiplier
+            player_move_speed = player_base_move_speed
+        except Exception:
+            pass
+    
     if new_room == (2, 1, 1) and not kael_origin_revealed:
         kael_origin_revealed = True
         start_cutscene([
