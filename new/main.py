@@ -36,7 +36,7 @@ SAVE_DIR = "saves"
 # Level 2 spawn point 
 LEVEL2_SPAWN_POINT = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 # ------------ LEVEL 2 (CYBERPUNK) ------------
-                                               
+
 LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
 LEVEL_2_BG_MAP = {                                                     
     (0,0): "rooftop_hideout",
@@ -514,6 +514,16 @@ GOBLIN_CONTACT_DAMAGE = 10
 goblin_contact_cooldown = 0.0  
 player_speed_boost_timer = 0.0
 player_electrified_timer = 0.0                                          
+INVINCIBILITY_DURATION = 120.0
+invincibility_timer = 0.0
+invincibility_brewed = False
+HEALTH_POTION_SHOP_COST = 15
+INVINCIBILITY_HERB_COST = 2
+SWORD_DAMAGE_BASE = 18
+SWORD_DAMAGE_GROWTH = 1.45
+SWORD_UPGRADE_BASE_COST = 25
+SWORD_UPGRADE_GROWTH = 1.6
+sword_level = 0
                         
 TIMEBANDIT_BASE_HP = 50
 TIMEBANDIT_BASE_DAMAGE = 10
@@ -530,6 +540,25 @@ inventory = {
 }
                                               
 inventory.setdefault("Ammo Packs", 0)
+
+def is_player_invincible():
+    return invincibility_timer > 0.0
+
+def get_sword_damage():
+    scaled = SWORD_DAMAGE_BASE * (SWORD_DAMAGE_GROWTH ** max(0, sword_level - 1))
+    return int(scaled * player_stat_multiplier)
+
+def apply_player_damage(amount, message=None, color=(255, 0, 0), duration=1.2):
+    """Apply player damage unless invincible."""
+    global health
+    if invincibility_timer > 0.0:
+        return False
+    if amount <= 0:
+        return False
+    health = max(0, health - int(amount))
+    if message:
+        set_message(message, color, duration)
+    return True
                                                       
                                                                        
 quests = {
@@ -1054,9 +1083,9 @@ npc_dialogues = {
     ],
     (2, 1, 1, "alchemist"): [
         "Temple Alchemist: Welcome to the ruins, traveler.",
-        "Temple Alchemist: Our potion uses 2 herbs and 1 gold per brew.",
-        "Temple Alchemist: Use the crafting table and press C to mix.",
-        "Temple Alchemist: Each session has limited uses, so plan ahead.",
+        "Temple Alchemist: Health potions cost gold, invincibility brews cost 2 herbs.",
+        "Temple Alchemist: Use the plaza table to buy potions.",
+        "Temple Alchemist: Supplies are limited, so plan ahead.",
     ],
     (2, 1, 1, "apprentice"): [
         "Apprentice Brewer: The mix is simple but precise.",
@@ -1863,8 +1892,7 @@ def update_boss(dt):
                 damage = boss_axe_damage - (armor_level * 5)  
                 if boss_phase == 2:
                     damage += 10  
-                health = max(0, health - damage)
-                set_message(f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
+                apply_player_damage(damage, f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
     
 
     update_thrown_axes(dt_sec)
@@ -1925,6 +1953,9 @@ def draw_inventory_hud(surface):
                  
     armor_text = small_font.render(f"ARMOR: LVL {armor_level}", True, (200, 255, 200))
     surface.blit(armor_text, (x_start + 20, y_start + 40))
+    if invincibility_timer > 0.0:
+        inv_text = small_font.render(f"INVINCIBLE {invincibility_timer:.0f}s", True, (120, 220, 255))
+        surface.blit(inv_text, (x_start + 20, y_start + 55))
     
                               
     section2_x = x_start + section_width + 10
@@ -2018,8 +2049,7 @@ def draw_inventory_hud(surface):
     herb_text = small_font.render(f"  {inventory['Herbs']}", True, (50, 255, 50))
     surface.blit(herb_text, (section4_x + 40, y_start + 42))
     
-                    
-    if inventory['Health Potions'] > 0 and health < max_health:
+    if inventory['Health Potions'] > 0:
         hint_text = small_font.render("Press H to use", True, (200, 200, 200))
         surface.blit(hint_text, (section4_x + 15, y_start + 60))
 
@@ -2158,8 +2188,8 @@ def enter_level_2():
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
     global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
-    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
-    global boss_defeated, boss_drop_collected
+    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards, sword_level
+    global boss_defeated, boss_drop_collected, invincibility_timer
     
     try:
                                                     
@@ -2173,9 +2203,11 @@ def enter_level_2():
                                                               
         max_health = 200
         health = max_health
+        invincibility_timer = 0.0
         
         player_has_weapon = False  
         using_sword_weapon = False
+        sword_level = 0
         player_sword_swinging = False
         player_sword_angle = 0.0
         player_sword_cooldown = 0.0
@@ -2227,10 +2259,11 @@ def enter_level_3():
     # it keeps some important items like gold keycards and time shards
     # other progress is reset so the level feels new
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
-    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests
+    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, sword_level
     global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
-    global boss_defeated, boss_drop_collected
+    global boss_defeated, boss_drop_collected, invincibility_timer
     global temple_puzzle_visible, temple_puzzle_tiles, temple_puzzle_attempts, temple_puzzle_solved, temple_gate_unlocked
+    global invincibility_brewed
     global jungle_trap_timer, jungle_traps_active, jungle_cleared, time_spirits
     global cave_entrance_revealed, cave_guardians, cave_relic_available, cave_relic_collected
     global crafting_visible, crafting_uses_left, crafting_ready_confirmed
@@ -2244,6 +2277,8 @@ def enter_level_3():
         current_room_coords[1] = 0
         current_room_coords[2] = 0
         player_rect.center = (SCREEN_WIDTH // 4, (SCREEN_HEIGHT * 3) // 4)
+        sword_level = 0
+        invincibility_timer = 0.0
 
         # keep gold and keycards
         keep_gold = inventory.get("Gold", 0)
@@ -2281,6 +2316,7 @@ def enter_level_3():
         waterfall_code_input = ""
         waterfall_code_solved = False
         waterfall_maze_visible = False
+        invincibility_brewed = False
         jungle_trap_timer = 0.0
         jungle_traps_active = False
         jungle_cleared = False
@@ -2311,7 +2347,7 @@ def enter_level_3():
 
 def start_level_1():
     """Start a fresh run in Level 1."""
-    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress
+    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, invincibility_timer, invincibility_brewed, sword_level
     global player_has_weapon, using_laser_weapon, current_ammo, max_ammo_count, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
     global inventory, quests, collected_gold, collected_herbs, collected_potions
@@ -2326,11 +2362,14 @@ def start_level_1():
 
     max_health = 100
     health = max_health
+    invincibility_timer = 0.0
+    invincibility_brewed = False
     weapon_level = 1
     armor_level = 0
     player_has_weapon = False
     using_laser_weapon = False
     using_sword_weapon = False
+    sword_level = 0
     player_sword_swinging = False
     player_sword_angle = 0.0
     player_sword_cooldown = 0.0
@@ -2406,8 +2445,7 @@ def update_thrown_axes(dt_sec):
         if player_rect.colliderect(axe_rect):
                                                                        
             damage = boss_axe_damage - (armor_level * 3)
-            health = max(0, health - damage)
-            set_message(f"Thrown axe hit for {damage} damage!", (255, 0, 0), 1.5)
+            apply_player_damage(damage, f"Thrown axe hit for {damage} damage!", (255, 0, 0), 1.5)
             axes_to_remove.append(i)
     
    
@@ -2694,10 +2732,9 @@ def update_boss2(dt):
         if proj["lifetime"] > 0:
             proj_rect = pygame.Rect(proj["x"] - 4, proj["y"] - 4, 8, 8)
             if player_rect.colliderect(proj_rect):
-                health = max(0, health - 12)                     
-                global player_electrified_timer
-                player_electrified_timer = 2.0                             
-                set_message("Hit by boss projectile!", (255, 100, 100), 1.0)
+                if apply_player_damage(12, "Hit by boss projectile!", (255, 100, 100), 1.0):
+                    global player_electrified_timer
+                    player_electrified_timer = 2.0
                 projectiles_to_remove.append(i)
         
                                                      
@@ -2896,12 +2933,8 @@ def update_bullets(dt):
             br = int(bullet.get("radius", 4))
             bullet_rect = pygame.Rect(bullet["x"] - br, bullet["y"] - br, br * 2, br * 2)
             if player_rect.colliderect(bullet_rect):
-                try:
-                    global health
-                    health = max(0, health - int(bullet.get("damage", 0)))
-                except Exception:
-                    pass
-                set_message(f"Hit for {int(bullet.get('damage',0))} damage", (255, 100, 100), 1.2)
+                damage = int(bullet.get("damage", 0))
+                apply_player_damage(damage, f"Hit for {damage} damage", (255, 100, 100), 1.2)
                 bullets_to_remove.append(i)
                 continue
 
@@ -3098,7 +3131,7 @@ def update_player_sword(dt):
     sword_rect, _ = _get_player_sword_rect()
 
     if not player_sword_hit:
-        sword_damage = int(18 * player_stat_multiplier)
+        sword_damage = get_sword_damage()
         room_key = tuple(current_room_coords)
 
         state = goblin_rooms.get(room_key)
@@ -3628,9 +3661,7 @@ def handle_damage_zones(dt):
 
         if hazard_timer >= 1.0:
             hazard_timer = 0.0
-            health -= 5  
-            
-            set_message("-5 Health!", (255, 0, 0), 1.0)
+            apply_player_damage(5, "-5 Health!", (255, 0, 0), 1.0)
             
             if health <= 0:
                 health = 0
@@ -3980,10 +4011,9 @@ def update_time_spirits(dt):
         spirit_rect = pygame.Rect(spirit["x"] - 14, spirit["y"] - 14, 28, 28)
         if spirit_rect.colliderect(player_rect) and spirit["contact_cd"] <= 0.0:
             damage = 6
-            health = max(0, health - damage)
-            player_electrified_timer = 2.0
+            if apply_player_damage(damage, f"-{damage} HP (Time Spirit)", (180, 120, 255), 1.2):
+                player_electrified_timer = 2.0
             spirit["contact_cd"] = 0.9
-            set_message(f"-{damage} HP (Time Spirit)", (180, 120, 255), 1.2)
 
 def draw_time_spirits(surface):
     """Draw jungle time spirits."""
@@ -4035,9 +4065,8 @@ def update_cave_guardians(dt):
         guardian_rect = pygame.Rect(guardian["x"] - 18, guardian["y"] - 18, 36, 36)
         if guardian_rect.colliderect(player_rect) and guardian["contact_cd"] <= 0.0:
             damage = 8
-            health = max(0, health - damage)
+            apply_player_damage(damage, f"-{damage} HP (Cave Guardian)", (255, 120, 120), 1.2)
             guardian["contact_cd"] = 1.0
-            set_message(f"-{damage} HP (Cave Guardian)", (255, 120, 120), 1.2)
 
 def draw_cave_guardians(surface):
     """Draw cave guardians."""
@@ -4231,8 +4260,7 @@ def update_echoes_freeze_and_laser(dt):
         
         # Laser fires and deals 12 damage
         if echoes_laser_timer <= 0:
-            health = max(0, health - 12)
-            set_message("LASER HIT! 12 damage!", (255, 0, 0), 1.0)
+            apply_player_damage(12, "LASER HIT! 12 damage!", (255, 0, 0), 1.0)
             echoes_laser_timer = 1.0  # Reset timer to fire again in 1 second
     
     # End freeze effect when timer expires (2 seconds)
@@ -4420,8 +4448,7 @@ def update_gorlock_boss(dt):
             mace_rect = calculate_gorlock_mace_rect()
             if player_rect.colliderect(mace_rect):
                 damage = 25
-                health = max(0, health - damage)
-                set_message(f"Gorlock's mace hit for {damage} damage!", (255, 100, 80), 1.2)
+                apply_player_damage(damage, f"Gorlock's mace hit for {damage} damage!", (255, 100, 80), 1.2)
     
     # Update thrown maces
     update_gorlock_thrown_maces(dt_sec, speed_factor)
@@ -4506,8 +4533,7 @@ def update_gorlock_thrown_maces(dt_sec, speed_factor):
         mace_rect = pygame.Rect(mace["x"] - 40, mace["y"] - 40, 80, 80)
         if player_rect.colliderect(mace_rect):
             damage = mace["damage"]
-            health = max(0, health - damage)
-            set_message(f"Hit by thrown mace for {damage} damage!", (255, 80, 60), 1.0)
+            apply_player_damage(damage, f"Hit by thrown mace for {damage} damage!", (255, 80, 60), 1.0)
             remove_indices.append(i)
     
     # Remove hit maces
@@ -5163,32 +5189,76 @@ def draw_crafting_menu(surface):
     pygame.draw.rect(surface, (25, 35, 25), box)
     pygame.draw.rect(surface, (120, 200, 140), box, 4)
 
-    title = font.render("Ruins Crafting Table", True, (200, 255, 210))
+    title = font.render("Ruins Plaza Potion Shop", True, (200, 255, 210))
     surface.blit(title, (box.centerx - title.get_width() // 2, box.y + 20))
-
-    recipe = small_font.render("Recipe: 2 Herbs + 1 Gold = 1 Health Potion", True, (230, 230, 230))
-    surface.blit(recipe, (box.x + 40, box.y + 80))
 
     stock = small_font.render(
         f"Herbs: {inventory['Herbs']}   Gold: {inventory['Gold']}   Potions: {inventory['Health Potions']}",
         True,
         (200, 220, 200),
     )
-    surface.blit(stock, (box.x + 40, box.y + 110))
+    surface.blit(stock, (box.x + 40, box.y + 80))
 
-    uses = small_font.render(f"Crafting uses left: {crafting_uses_left}", True, (255, 220, 140))
-    surface.blit(uses, (box.x + 40, box.y + 140))
+    item_buttons = []
+    y = box.y + 130
+    items = [
+        ("health_potion", "Health Potion", f"{HEALTH_POTION_SHOP_COST} Gold", "+30 HP (Press H)", inventory["Gold"] >= HEALTH_POTION_SHOP_COST, False),
+        ("invincibility_potion", "Invincibility Potion", f"{INVINCIBILITY_HERB_COST} Herbs", "One-time brew: 2 min immunity", inventory["Herbs"] >= INVINCIBILITY_HERB_COST, invincibility_brewed),
+    ]
+    for item_id, name, cost_text, desc, can_purchase, owned in items:
+        item_rect = pygame.Rect(box.x + 30, y, box.width - 60, 88)
+        y += 102
+        status_text = "OWNED" if owned else ""
+        if owned:
+            can_purchase = False
+        bg_color = (50, 55, 50) if can_purchase else (60, 40, 40)
+        border_color = (120, 200, 140) if can_purchase else (200, 120, 120)
+        pygame.draw.rect(surface, bg_color, item_rect)
+        pygame.draw.rect(surface, border_color, item_rect, 3)
+
+        name_text = font.render(name, True, (255, 255, 255))
+        surface.blit(name_text, (item_rect.x + 16, item_rect.y + 10))
+        desc_text = small_font.render(desc, True, (200, 200, 200))
+        surface.blit(desc_text, (item_rect.x + 16, item_rect.y + 40))
+        cost_render = font.render(cost_text, True, (255, 215, 0))
+        surface.blit(cost_render, (item_rect.right - 180, item_rect.y + 10))
+
+        if status_text:
+            status = font.render(status_text, True, (120, 255, 120))
+            surface.blit(status, (item_rect.right - 150, item_rect.y + 44))
+        else:
+            button_rect = pygame.Rect(item_rect.right - 120, item_rect.y + 42, 90, 30)
+            if can_purchase:
+                pygame.draw.rect(surface, (80, 120, 80), button_rect)
+                pygame.draw.rect(surface, (120, 200, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (200, 255, 200))
+                item_buttons.append((button_rect, item_id))
+            else:
+                pygame.draw.rect(surface, (120, 80, 80), button_rect)
+                pygame.draw.rect(surface, (200, 120, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (255, 200, 200))
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width() // 2,
+                                       button_rect.centery - button_text.get_height() // 2))
+
+    close_rect = pygame.Rect(box.centerx - 60, box.bottom - 60, 120, 40)
+    pygame.draw.rect(surface, (120, 80, 80), close_rect)
+    pygame.draw.rect(surface, (200, 120, 120), close_rect, 2)
+    close_text = font.render("CLOSE", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
+                              close_rect.centery - close_text.get_height() // 2))
 
     controls = [
-        "Press C to craft a potion.",
-        "Press ENTER to confirm you are ready to continue.",
-        "Press ESC to close the menu."
+        "Click BUY or press 1 for Health Potion.",
+        "Press 2 for Invincibility Potion.",
+        "Press ESC to close."
     ]
-    y = box.y + 200
+    y = close_rect.y - 70
     for line in controls:
         text = small_font.render(line, True, (220, 220, 220))
         surface.blit(text, (box.x + 40, y))
-        y += 26
+        y += 22
+
+    return item_buttons, close_rect
 
 def reset_temple_puzzle(randomize=True):
     """Reset the temple puzzle tiles."""
@@ -5211,7 +5281,7 @@ def check_temple_puzzle():
         set_message("The gate unlocks! Code obtained: LANDA", (180, 255, 180), 3.0)
     else:
         reset_temple_puzzle(randomize=True)
-        health = max(0, health - 5)
+        apply_player_damage(5)
         set_message("Incorrect symbols! The temple resets.", (255, 120, 120), 2.0)
 
 def handle_temple_puzzle_click(pos):
@@ -5491,65 +5561,110 @@ def draw_temple_shop(surface):
     overlay.fill((0, 0, 0, 210))
     surface.blit(overlay, (0, 0))
 
-    shop_rect = pygame.Rect(120, 110, SCREEN_WIDTH - 240, SCREEN_HEIGHT - 220)
-    pygame.draw.rect(surface, (40, 30, 20), shop_rect)
-    pygame.draw.rect(surface, (200, 170, 90), shop_rect, 3)
+    shop_rect = pygame.Rect(50, 50, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 100)
+    pygame.draw.rect(surface, (20, 15, 20), shop_rect)
+    pygame.draw.rect(surface, (200, 170, 90), shop_rect, 4)
 
-    title = title_font.render("TEMPLE CRAFTING", True, (255, 220, 140))
-    surface.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, shop_rect.y + 10))
+    title = title_font.render("RUINS MARKET", True, (255, 220, 140))
+    surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 70))
 
+    gold_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 80, shop_rect.width - 40, 40)
+    pygame.draw.rect(surface, (30, 25, 20), gold_rect)
+    pygame.draw.rect(surface, (255, 215, 0), gold_rect, 2)
     gold_text = font.render(f"Gold: {inventory['Gold']}", True, (255, 215, 0))
-    surface.blit(gold_text, (shop_rect.x + 20, shop_rect.y + 80))
+    surface.blit(gold_text, (gold_rect.centerx - gold_text.get_width()//2, gold_rect.centery - gold_text.get_height()//2))
+
+    stats_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 130, shop_rect.width - 40, 60)
+    pygame.draw.rect(surface, (35, 30, 35), stats_rect)
+    pygame.draw.rect(surface, (140, 110, 60), stats_rect, 2)
+    stats_lines = [
+        f"Sword Damage: {get_sword_damage() if using_sword_weapon else 0}",
+        f"Max Health: {max_health} | Current: {health}",
+        f"Armor Level: {armor_level}/{ARMOR_MAX_LEVEL}",
+        f"Sword Level: {max(0, sword_level)}",
+    ]
+    for i, line in enumerate(stats_lines):
+        stat_text = small_font.render(line, True, (230, 210, 170))
+        surface.blit(stat_text, (stats_rect.x + 10, stats_rect.y + 5 + i * 20))
+
+    items_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 210, shop_rect.width - 40, shop_rect.height - 280)
+    pygame.draw.rect(surface, (40, 35, 40), items_rect)
+    pygame.draw.rect(surface, (160, 120, 80), items_rect, 2)
+
+    sword_upgrade_cost = int(SWORD_UPGRADE_BASE_COST * (SWORD_UPGRADE_GROWTH ** max(0, sword_level - 1)))
+    temple_items = [
+        ("sword", "Temple Sword", "Ancient melee weapon", 25, "Unlocks sword"),
+        ("sword_upgrade", "Sword Upgrade", "Sharpened edge", sword_upgrade_cost, "Exponential damage boost"),
+        ("armor", "Temple Armor", "Reinforced plating", 25, "+20 Max Health"),
+        ("health_potion", "Health Potion", "Heals your wounds", 15, "+30 Health"),
+    ]
 
     item_buttons = []
-    y = shop_rect.y + 130
-    for item_id, item in temple_shop_items.items():
-        cost = item["cost"]
-        item_rect = pygame.Rect(shop_rect.x + 30, y, shop_rect.width - 60, 80)
-        y += 100
+    for i, (item_id, name, desc, cost, bonus) in enumerate(temple_items):
+        row = i // 2
+        col = i % 2
+        item_x = items_rect.x + 20 + col * (items_rect.width // 2)
+        item_y = items_rect.y + 20 + row * 120
+        item_bg = pygame.Rect(item_x, item_y, items_rect.width // 2 - 30, 110)
 
-        can_purchase = inventory["Gold"] >= cost
-        status_text = ""
         if item_id == "sword" and using_sword_weapon:
+            bg_color = (50, 40, 30)
+            border_color = (120, 200, 120)
+            status = "OWNED"
             can_purchase = False
-            status_text = "OWNED"
+        elif item_id == "sword_upgrade" and not using_sword_weapon:
+            bg_color = (50, 40, 30)
+            border_color = (200, 120, 120)
+            status = "NEEDS SWORD"
+            can_purchase = False
         elif item_id == "armor" and armor_level >= ARMOR_MAX_LEVEL:
+            bg_color = (50, 40, 30)
+            border_color = (120, 200, 120)
+            status = "MAXED"
             can_purchase = False
-            status_text = "MAXED"
-
-        bg_color = (50, 50, 60) if can_purchase else (60, 40, 40)
-        border_color = (150, 150, 200) if can_purchase else (200, 120, 120)
-        pygame.draw.rect(surface, bg_color, item_rect)
-        pygame.draw.rect(surface, border_color, item_rect, 3)
-
-        name_text = font.render(item["name"], True, (255, 255, 255))
-        cost_text = font.render(f"{cost} Gold", True, (255, 215, 0))
-        surface.blit(name_text, (item_rect.x + 10, item_rect.y + 10))
-        surface.blit(cost_text, (item_rect.right - 110, item_rect.y + 10))
-
-        if status_text:
-            status = font.render(status_text, True, (120, 255, 120))
-            surface.blit(status, (item_rect.right - 120, item_rect.y + 42))
         else:
-            button_rect = pygame.Rect(item_rect.right - 110, item_rect.y + 40, 90, 30)
+            can_purchase = inventory["Gold"] >= cost
+            status = ""
+            if can_purchase:
+                bg_color = (45, 40, 45)
+                border_color = (160, 120, 80)
+            else:
+                bg_color = (60, 40, 40)
+                border_color = (200, 120, 120)
+
+        pygame.draw.rect(surface, bg_color, item_bg)
+        pygame.draw.rect(surface, border_color, item_bg, 3)
+
+        name_text = font.render(name, True, (255, 255, 255))
+        desc_text = small_font.render(desc, True, (220, 210, 200))
+        cost_text = font.render(f"{cost} Gold", True, (255, 215, 0))
+        bonus_text = small_font.render(bonus, True, (180, 255, 200))
+        surface.blit(name_text, (item_bg.x + 10, item_bg.y + 10))
+        surface.blit(desc_text, (item_bg.x + 10, item_bg.y + 35))
+        surface.blit(cost_text, (item_bg.x + item_bg.width - 110, item_bg.y + 10))
+        surface.blit(bonus_text, (item_bg.x + 10, item_bg.y + 55))
+
+        if status:
+            owned_text = font.render(status, True, (120, 255, 120))
+            surface.blit(owned_text, (item_bg.x + item_bg.width - 95, item_bg.y + 70))
+        else:
+            button_rect = pygame.Rect(item_bg.x + item_bg.width - 90, item_bg.y + 70, 80, 30)
             if can_purchase:
                 pygame.draw.rect(surface, (80, 120, 80), button_rect)
                 pygame.draw.rect(surface, (120, 200, 120), button_rect, 2)
                 button_text = small_font.render("BUY", True, (200, 255, 200))
-                item_buttons.append((button_rect, item_id))
             else:
                 pygame.draw.rect(surface, (120, 80, 80), button_rect)
                 pygame.draw.rect(surface, (200, 120, 120), button_rect, 2)
                 button_text = small_font.render("BUY", True, (255, 200, 200))
-            surface.blit(button_text, (button_rect.centerx - button_text.get_width() // 2,
-                                       button_rect.centery - button_text.get_height() // 2))
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+            item_buttons.append((button_rect, item_id))
 
-    close_rect = pygame.Rect(shop_rect.centerx - 50, shop_rect.bottom - 50, 100, 40)
-    pygame.draw.rect(surface, (120, 80, 80), close_rect)
-    pygame.draw.rect(surface, (200, 120, 120), close_rect, 2)
-    close_text = font.render("CLOSE", True, (255, 255, 255))
-    surface.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
-                              close_rect.centery - close_text.get_height() // 2))
+    close_rect = pygame.Rect(shop_rect.centerx - 60, shop_rect.bottom - 50, 120, 40)
+    pygame.draw.rect(surface, (100, 60, 80), close_rect)
+    pygame.draw.rect(surface, (200, 120, 150), close_rect, 3)
+    close_text = font.render("EXIT", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, close_rect.centery - close_text.get_height()//2))
 
     return item_buttons, close_rect
 
@@ -5653,10 +5768,24 @@ def handle_blacksmith_purchase(item_id):
 
 def handle_temple_shop_purchase(item_id):
     """Handle purchases from the temple crafting shop."""
-    global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, health, max_health, inventory, armor_level
+    global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, health, max_health, inventory, armor_level, sword_level
+
+    if item_id == "sword_upgrade":
+        if not using_sword_weapon:
+            set_message("You need the Temple Sword first.", (255, 200, 0), 2.0)
+            return False
+        upgrade_cost = int(SWORD_UPGRADE_BASE_COST * (SWORD_UPGRADE_GROWTH ** max(0, sword_level - 1)))
+        if inventory["Gold"] < upgrade_cost:
+            set_message("Not enough gold for Sword Upgrade!", (255, 0, 0), 2.0)
+            return False
+        inventory["Gold"] -= upgrade_cost
+        sword_level += 1
+        set_message(f"Sword upgraded to level {sword_level}!", (0, 255, 0), 2.0)
+        return True
 
     item = temple_shop_items[item_id]
-    if inventory["Gold"] < item["cost"]:
+    cost = item.get("cost", 0)
+    if inventory["Gold"] < cost:
         set_message(f"Not enough gold for {item['name']}!", (255, 0, 0), 2.0)
         return False
 
@@ -5664,10 +5793,11 @@ def handle_temple_shop_purchase(item_id):
         if using_sword_weapon:
             set_message("You already have a sword.", (255, 200, 0), 2.0)
             return False
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         player_has_weapon = False
         using_laser_weapon = False
         using_sword_weapon = True
+        sword_level = max(1, sword_level)
         current_ammo = max_ammo_count
         if "buy_weapon" in quests:
             quests["buy_weapon"]["complete"] = True
@@ -5680,7 +5810,7 @@ def handle_temple_shop_purchase(item_id):
         if armor_level >= ARMOR_MAX_LEVEL:
             set_message("Armor is already at maximum level!", (255, 200, 0), 2.0)
             return False
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         prev_max = max_health
         armor_level += 1
         max_health = 100 + (armor_level * 20)
@@ -5692,9 +5822,38 @@ def handle_temple_shop_purchase(item_id):
         return True
 
     if item_id == "health_potion":
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         inventory["Health Potions"] += 1
         set_message("Purchased Health Potion!", (0, 255, 0), 2.0)
+        return True
+
+    return False
+
+
+def handle_crafting_purchase(item_id):
+    """Handle purchases from the Ruins Plaza potion shop."""
+    global invincibility_timer, invincibility_brewed
+
+    if item_id == "health_potion":
+        if inventory["Gold"] < HEALTH_POTION_SHOP_COST:
+            set_message("Not enough gold for Health Potion!", (255, 0, 0), 2.0)
+            return False
+        inventory["Gold"] -= HEALTH_POTION_SHOP_COST
+        inventory["Health Potions"] += 1
+        set_message("Purchased Health Potion!", (0, 255, 0), 2.0)
+        return True
+
+    if item_id == "invincibility_potion":
+        if invincibility_brewed:
+            set_message("Invincibility brew already claimed.", (255, 200, 0), 2.0)
+            return False
+        if inventory["Herbs"] < INVINCIBILITY_HERB_COST:
+            set_message("Not enough herbs for Invincibility Potion!", (255, 0, 0), 2.0)
+            return False
+        inventory["Herbs"] -= INVINCIBILITY_HERB_COST
+        invincibility_timer = INVINCIBILITY_DURATION
+        invincibility_brewed = True
+        set_message("Invincible for 2 minutes!", (120, 220, 255), 2.0)
         return True
 
     return False
@@ -6237,9 +6396,8 @@ def update_goblins(dt):
         goblin_rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
                                                          
         if not compiler_quest_active and goblin_rect.colliderect(player_rect) and goblin_contact_cooldown <= 0:
-            health = max(0, health - GOBLIN_CONTACT_DAMAGE)
+            apply_player_damage(GOBLIN_CONTACT_DAMAGE, f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
             goblin_contact_cooldown = 0.75
-            set_message(f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
 
 
 def update_npcs(dt):
@@ -6397,12 +6555,11 @@ def update_timebandits(dt):
             tb["contact_cooldown"] = max(0.0, tb.get("contact_cooldown", 0.0) - dt_sec)
                                                   
             if not compiler_quest_active and tb_rect.colliderect(player_rect) and tb.get("contact_cooldown", 0.0) <= 0.0:
-                health = max(0, health - tb_damage)
-                player_electrified_timer = 3.0                             
+                if apply_player_damage(tb_damage, f"-{tb_damage} HP (Time Bandit)", (255, 80, 80), 1.2):
+                    player_electrified_timer = 3.0
                 tb["contact_cooldown"] = 0.75
                                                                  
                 goblin_contact_cooldown = 0.75
-                set_message(f"-{tb_damage} HP (Time Bandit)", (255, 80, 80), 1.2)
 
                                                              
     min_sep = (default_w + default_h) / 4
@@ -6495,8 +6652,7 @@ def update_timebandits(dt):
                 miniboss_rect = pygame.Rect(int(tb["x"]), int(tb["y"]), int(w), int(h))
                 if (sr and player_rect.colliderect(sr)) or player_rect.colliderect(miniboss_rect):
                     dmg = tb.get("damage", 5)
-                    health = max(0, health - dmg)
-                    set_message(f"-{dmg} HP (Miniboss Sword)", (255, 80, 80), 1.5)
+                    apply_player_damage(dmg, f"-{dmg} HP (Miniboss Sword)", (255, 80, 80), 1.5)
                 tb["sword_rect"] = None
 
 def pickup_items():
@@ -6603,7 +6759,7 @@ def save_game(save_name):
     """Save lightweight player progress to disk."""
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
     global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, max_ammo_count, inventory, quests
-    global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
+    global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit, sword_level
     global boss_defeated, boss_drop_collected, boss_initialized, boss2_initialized
     try:
         normalized = normalize_save_name(save_name)
@@ -6619,6 +6775,7 @@ def save_game(save_name):
             "max_health": int(max_health),
             "weapon_level": int(weapon_level),
             "armor_level": int(armor_level),
+            "sword_level": int(sword_level),
             "player_has_weapon": bool(player_has_weapon),
             "using_laser_weapon": bool(using_laser_weapon),
             "using_sword_weapon": bool(using_sword_weapon),
@@ -6645,7 +6802,7 @@ def save_game(save_name):
 
 def load_game(save_name):
     """Load player progress from disk."""
-    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress
+    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, sword_level
     global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, max_ammo_count, inventory, quests
     global boss_defeated, boss_drop_collected, boss_initialized, boss2_initialized
     global game_state, dialogue_active, hud_visible, map_visible, quest_log_visible, cutscene_active
@@ -6669,9 +6826,12 @@ def load_game(save_name):
         max_health = int(payload.get("max_health", max_health))
         weapon_level = int(payload.get("weapon_level", weapon_level))
         armor_level = int(payload.get("armor_level", armor_level))
+        sword_level = int(payload.get("sword_level", sword_level))
         player_has_weapon = bool(payload.get("player_has_weapon", player_has_weapon))
         using_laser_weapon = bool(payload.get("using_laser_weapon", using_laser_weapon))
         using_sword_weapon = bool(payload.get("using_sword_weapon", using_sword_weapon))
+        if using_sword_weapon and sword_level < 1:
+            sword_level = 1
         player_sword_swinging = False
         player_sword_angle = 0.0
         player_sword_cooldown = 0.0
@@ -6917,10 +7077,7 @@ def handle_interaction():
                     set_message("The lock is already open.", (200, 200, 200), 1.5)
                 return
             elif obj_type == "crafting_table" and room_key == (2, 1, 1):
-                if crafting_ready_confirmed:
-                    set_message("You've already confirmed your readiness.", (200, 200, 200), 1.5)
-                else:
-                    crafting_visible = True
+                crafting_visible = True
                 return
             elif obj_type == "relic" and room_key == (2, 2, 2):
                 if cave_relic_available and not cave_relic_collected:
@@ -7164,6 +7321,15 @@ while running:
 
                 if close_rect.collidepoint(mouse_pos):
                     temple_shop_visible = False
+            elif game_state == "playing" and crafting_visible:
+                item_buttons, close_rect = draw_crafting_menu(screen)
+
+                for button_rect, item_id in item_buttons:
+                    if button_rect.collidepoint(mouse_pos):
+                        handle_crafting_purchase(item_id)
+
+                if close_rect.collidepoint(mouse_pos):
+                    crafting_visible = False
             
             elif game_state == "playing" and safe_visible:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
@@ -7225,21 +7391,10 @@ while running:
                         temple_puzzle_visible = False
                     continue
                 if crafting_visible:
-                    if event.key == pygame.K_c:
-                        if crafting_uses_left <= 0:
-                            set_message("No crafting uses left.", (255, 200, 100), 1.5)
-                        elif inventory["Herbs"] >= 2 and inventory["Gold"] >= 1:
-                            inventory["Herbs"] -= 2
-                            inventory["Gold"] -= 1
-                            inventory["Health Potions"] += 1
-                            crafting_uses_left -= 1
-                            set_message("Potion crafted!", (180, 255, 180), 1.5)
-                        else:
-                            set_message("Not enough resources.", (255, 200, 100), 1.5)
-                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        crafting_ready_confirmed = True
-                        crafting_visible = False
-                        set_message("You are ready to continue.", (180, 255, 180), 2.0)
+                    if event.key == pygame.K_1:
+                        handle_crafting_purchase("health_potion")
+                    elif event.key == pygame.K_2:
+                        handle_crafting_purchase("invincibility_potion")
                     elif event.key == pygame.K_ESCAPE:
                         crafting_visible = False
                     continue
@@ -7304,6 +7459,7 @@ while running:
                     inventory["Health Potions"] -= 1
                     health = min(max_health, health + 30)
                     set_message("+30 Health", (0, 255, 0), 1.5)
+                
 
                 elif event.key == pygame.K_t and DEBUG_MODE:
                     set_message("DEV: Teleporting to Level 3...", (120, 255, 120), 2.0)
@@ -7423,6 +7579,7 @@ while running:
        
         player_speed_boost_timer = max(0.0, player_speed_boost_timer - (dt / 1000.0))
         player_electrified_timer = max(0.0, player_electrified_timer - (dt / 1000.0))
+        invincibility_timer = max(0.0, invincibility_timer - (dt / 1000.0))
         
         speed_bonus = 3 if player_speed_boost_timer > 0 else 0
         speed_penalty = 0.5 if player_electrified_timer > 0 else 1.0                                        
