@@ -73,6 +73,8 @@ PLAYER_SPRITE_WIDTH = 80
 PLAYER_SPRITE_HEIGHT = 100
 player_move_speed = 7
 player_stat_multiplier = 1.0
+player_base_move_speed = 7
+player_base_stat_multiplier = 1.0
 current_room_coords = [0, 0, 0]
 previous_room_coords = tuple(current_room_coords)
 player_facing = "right"  
@@ -935,17 +937,31 @@ echoes_laser_active = False
 gorlock_boss = None
 gorlock_defeated = False
 gorlock_stage = 1
-gorlock_mace_state = None
-gorlock_mace_timer = 0.0
+gorlock_mace_swinging = False
+gorlock_mace_angle = 0
+gorlock_mace_thrown = []
+gorlock_attack_cooldown = 0.0
+gorlock_last_direction = "right"
 gorlock_taunt_active = False
 gorlock_taunt_timer = 0.0
-gorlock_taunt_cd = 30.0
-gorlock_mace_projectiles = []
-gorlock_berserk = False
+GORLOCK_TAUNT_DURATION = 3.0
+GORLOCK_TAUNT_COOLDOWN = 10.0
+gorlock_taunt_cooldown_timer = 0.0
 
 kael_boss = None
 kael_defeated = False
 kael_phase = 1
+
+# Waterfall Cave - Timing Challenge
+waterfall_platforms = []
+waterfall_timer = 0.0
+waterfall_challenge_active = False
+waterfall_challenge_complete = False
+waterfall_next_spawn_time = 0.0
+
+# Temporal Altar - Ritual System
+temporal_altar_activated = False
+kael_origin_countdown = 30.0
 
 cutscene_active = False
 cutscene_lines = []
@@ -2995,11 +3011,6 @@ def update_bullets(dt):
                     # Stage 2: immune to bullets
                     set_message("Gorlock is immune to bullets in Stage 2! Use your sword!", (255, 150, 100), 1.5)
                     bullets_to_remove.append(i)
-                    start_cutscene([
-                        "Kael falters, the relics pulsing with restored light.",
-                        "The final strike shatters the temporal distortion.",
-                        "A calm silence follows as the altar fades."
-                    ], line_duration=3.0, on_complete=_to_sanctuary)
 
         
         for d in drones:
@@ -3442,6 +3453,16 @@ def respawn_player():
     current_ammo = 0 if not player_has_weapon else max_ammo_count
     reloading_active = False
     reload_timer = 0.0
+    # Clear any freeze/lock state caused by bosses (e.g., Echoes miniboss)
+    try:
+        if 'echoes_player_frozen' in globals():
+            globals()['echoes_player_frozen'] = False
+        if 'echoes_player_freeze_timer' in globals():
+            globals()['echoes_player_freeze_timer'] = 0.0
+        if 'echoes_player_frozen_pos' in globals():
+            globals()['echoes_player_frozen_pos'] = (0, 0)
+    except Exception:
+        pass
     
     set_message("You died! Respawned in village. Lost 1 weapon and armor level.", (255, 100, 100), 4.0)
 
@@ -3870,6 +3891,9 @@ def draw_room(surface, level, row, col):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
     draw_level3_room_extras(surface, room_key)
+    draw_waterfall_challenge(surface)
+    draw_temporal_altar_hint(surface)
+    draw_timeless_sanctuary_final(surface)
 
 def get_time_slow_factor():
     """Return the global time slow multiplier."""
@@ -4219,165 +4243,336 @@ def draw_echoes_miniboss(surface):
     if echoes_laser_active and echoes_player_frozen:
         pygame.draw.line(surface, (255, 0, 0), echoes_miniboss["rect"].center, echoes_player_frozen_pos, 4)
         pygame.draw.circle(surface, (255, 100, 100), echoes_player_frozen_pos, 20, 2)
+
+def init_waterfall_challenge():
+    """Initialize the Waterfall Cave timing-based platform challenge."""
+    global waterfall_platforms, waterfall_timer, waterfall_challenge_active, waterfall_challenge_complete, waterfall_next_spawn_time
+    if waterfall_challenge_complete:
+        return
+    waterfall_challenge_active = True
+    waterfall_timer = 0.0
+    waterfall_next_spawn_time = 1.5
+    waterfall_platforms = []
+    set_message("Navigate the falling platforms to reach the sanctuary.", (150, 200, 255), 3.0)
+
+def update_waterfall_challenge(dt):
+    """Update Waterfall Cave platform challenge."""
+    global waterfall_timer, waterfall_next_spawn_time, waterfall_platforms, waterfall_challenge_active, waterfall_challenge_complete, player_rect
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 2, 2) or not waterfall_challenge_active or waterfall_challenge_complete:
+        return
     
+    dt_sec = dt / 1000.0
+    waterfall_timer += dt_sec
+    waterfall_next_spawn_time -= dt_sec
+    
+    # Spawn new platform every 1.5 seconds
+    if waterfall_next_spawn_time <= 0:
+        waterfall_next_spawn_time = 2.0
+        # Randomly position platform
+        platform_x = random.randint(100, 650)
+        platform_y = 100
+        waterfall_platforms.append({
+            "x": platform_x,
+            "y": platform_y,
+            "width": 100,
+            "height": 20,
+            "fall_time": 0.0,
+            "fall_speed": 200  # pixels per second
+        })
+        set_message("Platform spawning!", (100, 180, 255), 0.5)
+    
+    # Update platforms - move them down
+    platforms_to_remove = []
+    for i, platform in enumerate(waterfall_platforms):
+        platform["y"] += platform["fall_speed"] * dt_sec
+        
+        # Check if player is on platform
+        platform_rect = pygame.Rect(platform["x"], platform["y"], platform["width"], platform["height"])
+        if player_rect.colliderect(platform_rect):
+            # Player is on platform - stop it
+            platform["fall_speed"] = 0
+            player_rect.bottom = platform_rect.top
+        elif player_rect.bottom > platform_rect.top and player_rect.bottom < platform_rect.bottom:
+            # Player might be on platform
+            platform["fall_speed"] = 0
+            player_rect.bottom = platform_rect.top
+        
+        # Remove platforms that fall off screen
+        if platform["y"] > SCREEN_HEIGHT + 50:
+            platforms_to_remove.append(i)
+    
+    for i in sorted(platforms_to_remove, reverse=True):
+        if 0 <= i < len(waterfall_platforms):
+            waterfall_platforms.pop(i)
+    
+    # Check if player reached the top (completion)
+    if player_rect.top < 100:
+        waterfall_challenge_complete = True
+        waterfall_challenge_active = False
+        inventory["Gold"] += 50
+        set_message("You navigated the cascade! +50 Gold earned.", (200, 255, 100), 3.0)
+
+def draw_waterfall_challenge(surface):
+    """Draw Waterfall Cave platform challenge."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 2, 2) or not waterfall_challenge_active:
+        return
+    
+    # Draw platforms
+    for platform in waterfall_platforms:
+        rect = pygame.Rect(platform["x"], platform["y"], platform["width"], platform["height"])
+        pygame.draw.rect(surface, (100, 200, 255), rect)
+        pygame.draw.rect(surface, (50, 150, 200), rect, 2)
+    
+    # Draw instruction text
+    font_small = pygame.font.SysFont(None, 24)
+    text = font_small.render("Jump to the platforms! Reach the top!", True, (150, 200, 255))
+    surface.blit(text, (SCREEN_WIDTH // 2 - 150, 20))
+
 def spawn_gorlock_boss():
     """Spawn Gorlock the Time Eater in the Forgotten City."""
-    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_state, gorlock_mace_timer, gorlock_taunt_active, gorlock_taunt_timer, gorlock_taunt_cd, gorlock_berserk, gorlock_mace_projectiles
+    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_swinging, gorlock_mace_thrown
+    global gorlock_mace_angle, gorlock_attack_cooldown, gorlock_last_direction
+    
     gorlock_stage = 1
     gorlock_boss = {
         "rect": pygame.Rect(300, 160, 200, 260),
         "hp": 6000,
         "max_hp": 6000,
-        "speed": int(player_move_speed * 1.7),
-        "mace_cd": 0.0,
-        "_taunt_timer": 30.0,
+        "speed": 220,  # Similar to boss speed
+        "last_direction": "right",
     }
     gorlock_defeated = False
-    gorlock_mace_state = None
-    gorlock_mace_timer = 0.0
-    gorlock_taunt_active = False
-    gorlock_taunt_timer = 0.0
-    gorlock_mace_projectiles = []
-    gorlock_berserk = False
+    gorlock_stage = 1
+    gorlock_mace_swinging = False
+    gorlock_mace_angle = 0
+    gorlock_mace_thrown = []
+    gorlock_attack_cooldown = 0.0
+    gorlock_last_direction = "right"
     set_message("Gorlock, the Time Eater has appeared!", (200, 100, 100), 3.0)
 
 def update_gorlock_boss(dt):
-    """Update Gorlock behaviour and attacks."""
-    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_state, gorlock_mace_timer, gorlock_taunt_active, gorlock_taunt_timer, gorlock_mace_projectiles, gorlock_berserk, health, player_stat_multiplier
+    """Update Gorlock behaviour and attacks - works like regular boss."""
+    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_swinging, gorlock_mace_angle
+    global gorlock_mace_thrown, gorlock_attack_cooldown, gorlock_last_direction, health, player_stat_multiplier
+    global gorlock_taunt_active, gorlock_taunt_timer, gorlock_taunt_cooldown_timer
+    global player_base_move_speed, player_base_stat_multiplier, player_move_speed
+    
     if not gorlock_boss or gorlock_defeated:
         return
+    
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 1):
         return
-    if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible or maze_visible or race_active or crafting_visible or temple_puzzle_visible or temple_shop_visible:
+    
+    if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible:
         return
     
     dt_sec = dt / 1000.0
     speed_factor = get_time_slow_factor()
-
-    # Movement - approach player
+    
+    # MOVEMENT - Approach player like regular boss
     dx = player_rect.centerx - gorlock_boss["rect"].centerx
     dy = player_rect.centery - gorlock_boss["rect"].centery
     dist = math.hypot(dx, dy)
-    if dist > 10:
-        boss_speed = gorlock_boss.get("speed", int(player_move_speed * 1.7))
-        step = boss_speed * speed_factor * dt_sec
-        gorlock_boss["rect"].x += int((dx / dist) * step)
-        gorlock_boss["rect"].y += int((dy / dist) * step)
-
-    # Stage transition
-    if gorlock_stage == 1 and gorlock_boss["hp"] <= 0:
-        gorlock_stage = 2
-        gorlock_boss["hp"] = 6000
-        gorlock_boss["max_hp"] = 6000
-        gorlock_boss["mace_cd"] = 0.0
-        set_message("Gorlock enrages and enters Stage 2!", (255, 120, 100), 3.0)
-        return
-
-    # Berserk when stage2 hp <= 1000
-    if gorlock_stage == 2 and not gorlock_berserk and gorlock_boss["hp"] <= 1000:
-        gorlock_berserk = True
-        gorlock_boss["speed"] = int(gorlock_boss.get("speed", int(player_move_speed * 1.7)) * 1.25)
-        gorlock_boss["mace_cd"] = max(0.5, gorlock_boss.get("mace_cd", 5.0) * 0.75)
-        set_message("Gorlock goes berserk!", (255, 50, 50), 2.5)
-
-    # Mace cooldown decrement
-    if "mace_cd" not in gorlock_boss:
-        gorlock_boss["mace_cd"] = 0.0
-    gorlock_boss["mace_cd"] -= dt_sec * speed_factor
     
-    # Trigger mace swing when cooldown expires
-    if gorlock_boss["mace_cd"] <= 0:
-        gorlock_boss["mace_cd"] = 6.0 if gorlock_stage == 1 else 5.0
-        gorlock_mace_state = "swing"
-        gorlock_mace_timer = 0.8
-        set_message("Gorlock winds up his massive mace!", (255, 140, 120), 1.2)
-
-    # Handle mace swing - apply damage during swing
-    if gorlock_mace_state == "swing":
-        gorlock_mace_timer -= dt_sec * speed_factor
-        # Check if player is hit by the swing
-        swing_rect = pygame.Rect(gorlock_boss["rect"].centerx - 150, gorlock_boss["rect"].centery - 120, 300, 240)
-        if player_rect.colliderect(swing_rect):
-            health = max(0, health - 45)
-            set_message("Hit by Gorlock's mace! -45 HP", (255, 100, 80), 1.2)
-        if gorlock_mace_timer <= 0:
-            gorlock_mace_state = None
-
-    # Stage 2: throw mace occasionally
-    if gorlock_stage == 2 and random.random() < 0.08:
-        if dist > 0:
-            angle = math.atan2(dy, dx)
-            gorlock_mace_projectiles.append({
-                "x": float(gorlock_boss["rect"].centerx),
-                "y": float(gorlock_boss["rect"].centery),
-                "vx": math.cos(angle) * 320,
-                "vy": math.sin(angle) * 320,
-                "lifetime": 6.0,
-                "damage": 30
-            })
-            set_message("Gorlock hurls his mace at you!", (255, 120, 80), 1.0)
-
-    # Update mace projectiles
-    proj_remove = []
-    for i, proj in enumerate(gorlock_mace_projectiles):
-        proj["x"] += proj["vx"] * dt_sec * speed_factor
-        proj["y"] += proj["vy"] * dt_sec * speed_factor
-        proj["lifetime"] -= dt_sec * speed_factor
-        
-        if proj["lifetime"] > 0:
-            proj_rect = pygame.Rect(int(proj["x"]) - 12, int(proj["y"]) - 12, 24, 24)
-            if player_rect.colliderect(proj_rect):
-                health = max(0, health - 30)
-                set_message("Hit by thrown mace! -30 HP", (255, 80, 60), 1.0)
-                proj_remove.append(i)
-        
-        if proj["lifetime"] <= 0:
-            proj_remove.append(i)
+    if dx > 0:
+        gorlock_last_direction = "right"
+    else:
+        gorlock_last_direction = "left"
     
-    for i in sorted(proj_remove, reverse=True):
-        if 0 <= i < len(gorlock_mace_projectiles):
-            gorlock_mace_projectiles.pop(i)
+    # Move toward player if close enough
+    if dist > 0 and dist < 500:
+        step = gorlock_boss["speed"] * speed_factor * dt_sec
+        gorlock_boss["rect"].x += (dx / dist) * step
+        gorlock_boss["rect"].y += (dy / dist) * step
+        
+        # Keep in bounds
+        gorlock_boss["rect"].x = max(50, min(SCREEN_WIDTH - gorlock_boss["rect"].width - 50, gorlock_boss["rect"].x))
+        gorlock_boss["rect"].y = max(50, min(SCREEN_HEIGHT - gorlock_boss["rect"].height - 50, gorlock_boss["rect"].y))
+    
+    # Update attack cooldown
+    if gorlock_attack_cooldown > 0:
+        gorlock_attack_cooldown -= dt_sec * speed_factor
 
-    # Taunt handling
-    if "_taunt_timer" not in gorlock_boss:
-        gorlock_boss["_taunt_timer"] = 30.0
-    gorlock_boss["_taunt_timer"] -= dt_sec * speed_factor
-    if gorlock_boss["_taunt_timer"] <= 0:
-        gorlock_boss["_taunt_timer"] = 30.0
-        gorlock_taunt_active = True
-        gorlock_taunt_timer = 5.0
-        player_stat_multiplier = 0.5
-        set_message("Gorlock taunts! Your strength fades!", (200, 60, 60), 2.0)
+    # Update taunt cooldown (time until Gorlock can taunt again)
+    if gorlock_taunt_cooldown_timer > 0:
+        gorlock_taunt_cooldown_timer = max(0.0, gorlock_taunt_cooldown_timer - dt_sec * speed_factor)
 
-    # Update taunt timer
+    # If a taunt is active, tick its timer and restore stats when it ends
     if gorlock_taunt_active:
         gorlock_taunt_timer -= dt_sec * speed_factor
         if gorlock_taunt_timer <= 0:
             gorlock_taunt_active = False
-            player_stat_multiplier = 1.0
+            gorlock_taunt_timer = 0.0
+            # restore base stats
+            try:
+                player_stat_multiplier = player_base_stat_multiplier
+                player_move_speed = player_base_move_speed
+            except Exception:
+                pass
 
-    # Check defeat
-    if gorlock_boss["hp"] <= 0 and gorlock_stage == 2:
+    # Opportunistically trigger a taunt instead of an attack
+    # Gorlock may taunt the player if nearby, but only if not already taunting
+    if (not gorlock_taunt_active and gorlock_taunt_cooldown_timer <= 0
+            and gorlock_attack_cooldown <= 0 and dist < 350):
+        # small chance to taunt when ready
+        if random.random() < 0.18:
+            gorlock_taunt_active = True
+            gorlock_taunt_timer = GORLOCK_TAUNT_DURATION
+            gorlock_taunt_cooldown_timer = GORLOCK_TAUNT_COOLDOWN
+            # apply debuff: 50% of base stats
+            try:
+                player_stat_multiplier = player_base_stat_multiplier * 0.5
+                player_move_speed = player_base_move_speed * 0.5
+            except Exception:
+                pass
+            set_message("Gorlock taunts you! Your strength falters!", (255, 60, 60), 3.0)
+    
+    # STAGE 1: Swing mace attacks when close
+    if gorlock_stage == 1:
+        if dist < 200 and gorlock_attack_cooldown <= 0:
+            gorlock_mace_swinging = True
+            gorlock_mace_angle = 0
+            gorlock_attack_cooldown = 2.5
+    
+    # STAGE 2 TRANSITION: At 3000 HP, enter stage 2
+    elif gorlock_stage == 2:
+        # Faster attacks in stage 2
+        if dist < 200 and gorlock_attack_cooldown <= 0:
+            if random.random() < 0.4:
+                # Swing mace
+                gorlock_mace_swinging = True
+                gorlock_mace_angle = 0
+            else:
+                # Throw mace
+                throw_gorlock_mace(dx, dy, dist)
+            gorlock_attack_cooldown = 2.0
+    
+    # MACE SWING - Similar to boss axe swing
+    if gorlock_mace_swinging:
+        gorlock_mace_angle += 12
+        if gorlock_mace_angle >= 180:
+            gorlock_mace_swinging = False
+            gorlock_mace_angle = 0
+            
+            # Check hit after swing completes
+            mace_rect = calculate_gorlock_mace_rect()
+            if player_rect.colliderect(mace_rect):
+                damage = 45
+                health = max(0, health - damage)
+                set_message(f"Gorlock's mace hit for {damage} damage!", (255, 100, 80), 1.2)
+    
+    # Update thrown maces
+    update_gorlock_thrown_maces(dt_sec, speed_factor)
+    
+    # STAGE TRANSITION
+    if gorlock_stage == 1 and gorlock_boss["hp"] <= 3000:
+        gorlock_stage = 2
+        set_message("Gorlock enrages! Stage 2!", (255, 120, 100), 3.0)
+    
+    # CHECK DEFEAT
+    if gorlock_boss["hp"] <= 0:
         gorlock_defeated = True
-        set_message("Gorlock the Time Eater is defeated!", (200, 255, 200), 4.0)
+        inventory["Time Shards"] += 1
+        set_message("Gorlock falls! Time Shard obtained!", (200, 255, 100), 4.0)
+        start_cutscene([
+            "The monstrous figure crumbles to dust.",
+            "The timeline trembles as Gorlock fades.",
+            "His temporal power returns to the void.",
+            "Only Kael remains—the source of corruption."
+        ], line_duration=3.0)
+
+def calculate_gorlock_mace_rect():
+    """Calculate the position of Gorlock's swinging mace."""
+    if not gorlock_boss:
+        return pygame.Rect(0, 0, 0, 0)
+    
+    center_x = gorlock_boss["rect"].centerx
+    center_y = gorlock_boss["rect"].centery
+    
+    radius = 120  # Large swing radius
+    angle_rad = math.radians(gorlock_mace_angle)
+    
+    if gorlock_last_direction == "right":
+        mace_x = center_x + radius * math.cos(angle_rad)
+        mace_y = center_y + radius * math.sin(angle_rad)
+    else:
+        mace_x = center_x - radius * math.cos(angle_rad)
+        mace_y = center_y + radius * math.sin(angle_rad)
+    
+    return pygame.Rect(mace_x - 60, mace_y - 60, 120, 120)
+
+def throw_gorlock_mace(dx, dy, dist):
+    """Throw mace toward player."""
+    if not gorlock_boss or dist <= 0:
+        return
+    
+    speed = 450
+    gorlock_mace_thrown.append({
+        "x": float(gorlock_boss["rect"].centerx),
+        "y": float(gorlock_boss["rect"].centery),
+        "vx": (dx / dist) * speed,
+        "vy": (dy / dist) * speed,
+        "angle": 0,
+        "lifetime": 8.0,
+        "damage": 30
+    })
+    set_message("Gorlock hurls his mace!", (255, 120, 80), 1.0)
+
+def update_gorlock_thrown_maces(dt_sec, speed_factor):
+    """Update positions of thrown maces and check collisions."""
+    global gorlock_mace_thrown, health
+    
+    remove_indices = []
+    
+    for i, mace in enumerate(gorlock_mace_thrown):
+        mace["x"] += mace["vx"] * dt_sec * speed_factor
+        mace["y"] += mace["vy"] * dt_sec * speed_factor
+        mace["angle"] += 15
+        mace["lifetime"] -= dt_sec * speed_factor
+        
+        # Remove if off screen or lifetime expired
+        if (mace["x"] < -100 or mace["x"] > SCREEN_WIDTH + 100 or 
+            mace["y"] < -100 or mace["y"] > SCREEN_HEIGHT + 100):
+            remove_indices.append(i)
+            continue
+        
+        if mace["lifetime"] <= 0:
+            remove_indices.append(i)
+            continue
+        
+        # Check collision with player
+        mace_rect = pygame.Rect(mace["x"] - 40, mace["y"] - 40, 80, 80)
+        if player_rect.colliderect(mace_rect):
+            damage = mace["damage"]
+            health = max(0, health - damage)
+            set_message(f"Hit by thrown mace for {damage} damage!", (255, 80, 60), 1.0)
+            remove_indices.append(i)
+    
+    # Remove hit maces
+    for i in sorted(remove_indices, reverse=True):
+        gorlock_mace_thrown.pop(i)
 
 def draw_gorlock_boss(surface):
-    """Draw Gorlock and his effects."""
+    """Draw Gorlock and his attacks with large rotating maces."""
     if not gorlock_boss or gorlock_defeated:
         return
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 1):
         return
+    
     rect = gorlock_boss["rect"]
-    # Load and draw Gorlock sprite
+    
+    # Draw Gorlock sprite
     gorlock_sprite = load_image("npcs/gorlock.png", rect.width, rect.height)
     if gorlock_sprite:
         surface.blit(gorlock_sprite, rect)
     else:
         pygame.draw.rect(surface, (80, 20, 20), rect)
     
-    # Draw HP bar
+    # Draw HP bar above Gorlock
     bar_w = rect.width
     bar_x = rect.x
     bar_y = rect.y - 14
@@ -4385,23 +4580,34 @@ def draw_gorlock_boss(surface):
     hp_ratio = max(0, gorlock_boss["hp"]) / max(1, gorlock_boss["max_hp"])
     pygame.draw.rect(surface, (200, 40, 40), (bar_x, bar_y, int(bar_w * hp_ratio), 8))
     
-    # Draw mace projectiles with sprite
-    mace_sprite = load_image("projectiles/mace.png", 24, 24)
-    for proj in gorlock_mace_projectiles:
-        if proj["lifetime"] > 0:
-            proj_rect = pygame.Rect(int(proj["x"]) - 12, int(proj["y"]) - 12, 24, 24)
-            if mace_sprite:
-                surface.blit(mace_sprite, proj_rect)
-            else:
-                pygame.draw.circle(surface, (140, 80, 40), (int(proj["x"]), int(proj["y"])), 12)
-
-def draw_screen_tint(surface):
-    """Draw screen tint for Gorlock taunt."""
-    if gorlock_taunt_active:
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        alpha = int(120)
-        overlay.fill((180, 0, 0, alpha))
-        surface.blit(overlay, (0, 0))
+    # Draw swinging mace - VERY LARGE, rotating
+    if gorlock_mace_swinging:
+        mace_rect = calculate_gorlock_mace_rect()
+        mace_img = load_image("projectiles/mace.png", 120, 120)  # VERY LARGE
+        
+        if mace_img:
+            rotated_mace = pygame.transform.rotate(mace_img, -gorlock_mace_angle)
+            if gorlock_last_direction == "left":
+                rotated_mace = pygame.transform.flip(rotated_mace, True, False)
+            surface.blit(rotated_mace, (mace_rect.x, mace_rect.y))
+        else:
+            # Fallback: draw large circle
+            pygame.draw.circle(surface, (180, 100, 50), (mace_rect.centerx, mace_rect.centery), 60)
+    
+    # Draw thrown maces - VERY LARGE, rotating
+    for mace in gorlock_mace_thrown:
+        mace_img = load_image("projectiles/mace.png", 100, 100)  # VERY LARGE
+        
+        if mace_img:
+            rotated_mace = pygame.transform.rotate(mace_img, -mace["angle"])
+            surface.blit(rotated_mace, (mace["x"] - 50, mace["y"] - 50))
+        else:
+            # Fallback: draw large circle
+            pygame.draw.circle(surface, (180, 100, 50), (int(mace["x"]), int(mace["y"])), 50)
+    
+    # Draw stage indicator
+    stage_text = font.render(f"Stage {gorlock_stage}", True, (255, 100, 100))
+    surface.blit(stage_text, (rect.x + 10, rect.y - 30))
 
 def spawn_kael_boss():
     """Spawn Kael in the Temporal Altar."""
@@ -4482,6 +4688,90 @@ def draw_kael_boss(surface):
     pygame.draw.rect(surface, (80, 0, 0), (bar_x, bar_y, bar_w, 7))
     hp_ratio = max(0, kael_boss["hp"]) / max(1, kael_boss["max_hp"])
     pygame.draw.rect(surface, (255, 80, 120), (bar_x, bar_y, int(bar_w * hp_ratio), 7))
+
+def interact_temporal_altar(x, y):
+    """Interact with the Temporal Altar to activate it."""
+    global temporal_altar_activated, kael_boss
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 1, 2):
+        return
+    
+    if temporal_altar_activated:
+        set_message("The altar is already active.", (150, 150, 255), 2.0)
+        return
+    
+    if not gorlock_defeated:
+        set_message("The altar requires the essence of Gorlock to activate.", (150, 100, 100), 2.5)
+        return
+    
+    temporal_altar_activated = True
+    set_message("The altar resonates with temporal energy!", (200, 255, 200), 3.0)
+    
+    # Trigger Kael boss encounter if not already active
+    if kael_boss is None and not kael_defeated:
+        start_cutscene([
+            "The altar pulses with ancient power.",
+            "A rift tears open in the fabric of time.",
+            "Kael, the Time Tyrant, materializes before you.",
+            "The final confrontation has begun..."
+        ], line_duration=3.0, on_complete=spawn_kael_boss)
+
+def draw_temporal_altar_hint(surface):
+    """Draw hint text for Temporal Altar interaction."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 1, 2):
+        return
+    if temporal_altar_activated or kael_defeated:
+        return
+    
+    if gorlock_defeated:
+        altar_rect = pygame.Rect(330, 250, 140, 120)
+        if player_rect.colliderect(altar_rect.inflate(100, 100)):
+            hint_font = pygame.font.SysFont(None, 24)
+            hint_text = hint_font.render("Press E to activate the Temporal Altar", True, (200, 255, 200))
+            surface.blit(hint_text, (SCREEN_WIDTH // 2 - 140, 50))
+
+def draw_timeless_sanctuary_final(surface):
+    """Draw and manage the final ending sequence in Timeless Sanctuary."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 0, 2):
+        return
+    
+    # Draw the final altar/pedestal at center
+    pedestal_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT // 2 - 60, 100, 120)
+    pygame.draw.rect(surface, (200, 180, 255), pedestal_rect)
+    pygame.draw.rect(surface, (255, 255, 100), pedestal_rect, 3)
+    
+    # Draw interaction hint
+    if player_rect.colliderect(pedestal_rect.inflate(80, 80)):
+        hint_font = pygame.font.SysFont(None, 26)
+        hint_text = hint_font.render("Press E to complete the ritual", True, (255, 255, 100))
+        surface.blit(hint_text, (SCREEN_WIDTH // 2 - 130, SCREEN_HEIGHT // 2 - 150))
+
+def interact_timeless_pedestal(x, y):
+    """Interact with the final pedestal to trigger ending."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 0, 2):
+        return
+    
+    if not (gorlock_defeated and kael_defeated and inventory["Time Shards"] >= 3):
+        set_message("The timeline is not yet ready for restoration.", (150, 100, 150), 2.5)
+        return
+    
+    # Trigger final cutscene
+    start_cutscene([
+        "You place all three Time Shards upon the pedestal.",
+        "They merge with a brilliant light, piercing the void.",
+        "The corrupted timelines collapse inward.",
+        "Reality stabilizes as the Time Tyrant's influence dissolves.",
+        "The world begins to remember itself.",
+        "",
+        "Arin, you have restored the timeline.",
+        "The echoes of the multiverse fade into silence.",
+        "A new age begins, free from temporal corruption.",
+        "",
+        "THE END"
+    ], line_duration=4.0)
 
 def draw_level3_room_extras(surface, room_key):
     """Draw and register dynamic Level 3 elements."""
@@ -4572,8 +4862,10 @@ def handle_room_entry(new_room, old_room):
     if new_room == (2, 1, 2) and not kael_defeated and kael_boss is None:
         spawn_kael_boss()
 
-    if new_room == (2, 2, 2):
+    # Initialize Waterfall Cave timing challenge
+    if new_room == (2, 2, 2) and not waterfall_challenge_complete:
         init_cave_guardians()
+        init_waterfall_challenge()
 
     if new_room == (2, 0, 2) and not timeline_restored:
         def _finish_ending():
@@ -4688,6 +4980,59 @@ def draw_message(surface):
         pygame.draw.rect(surface, (0, 0, 0), rect.inflate(20, 10))
         pygame.draw.rect(surface, hud_message_color, rect.inflate(20, 10), 2)
         surface.blit(msg, rect)
+
+
+def draw_screen_tint(surface):
+    """Apply simple ambient tints and low-health feedback.
+
+    This function is intentionally lightweight and defensive — it won't
+    crash if expected globals are missing. It tints the whole screen
+    slightly depending on the current level, and adds a faint red flash
+    when the player's health is very low.
+    """
+    try:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        # Level-specific ambient tints
+        level = current_room_coords[0] if isinstance(current_room_coords, (list, tuple)) else 0
+        if level == 1:
+            # Cyberpunk / neon city: cool blue/purple wash
+            overlay.fill((30, 60, 120, 28))
+        elif level == 2:
+            # Jungle/temple: subtle greenish wash
+            overlay.fill((10, 40, 20, 18))
+        else:
+            # Default: very faint vignette (almost invisible)
+            overlay.fill((0, 0, 0, 0))
+
+        surface.blit(overlay, (0, 0))
+
+        # Low-health flash: adds urgency when health is low
+        try:
+            if max_health > 0 and health / max_health < 0.25:
+                # stronger flash the lower the health
+                ratio = 1.0 - (health / max_health)
+                alpha = int(40 + ratio * 120)
+                flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                flash.fill((180, 30, 30, alpha))
+                surface.blit(flash, (0, 0))
+        except Exception:
+            pass
+        # Gorlock taunt overlay (strong red wash while taunted)
+        try:
+            if 'gorlock_taunt_active' in globals() and gorlock_taunt_active:
+                # compute intensity from remaining taunt time (if available)
+                remaining = gorlock_taunt_timer if 'gorlock_taunt_timer' in globals() else GORLOCK_TAUNT_DURATION
+                dur = GORLOCK_TAUNT_DURATION if 'GORLOCK_TAUNT_DURATION' in globals() else 3.0
+                ratio = max(0.0, min(1.0, remaining / dur))
+                alpha = int(180 * ratio) + 30
+                red = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                red.fill((200, 30, 30, alpha))
+                surface.blit(red, (0, 0))
+        except Exception:
+            pass
+    except Exception:
+        # Be conservative: don't let tinting break the whole draw loop
+        return
 
 def draw_dialogue(surface):
     """Display NPC dialogue."""
@@ -6474,12 +6819,23 @@ def handle_interaction():
                     set_checkpoint(room_key)
                     set_message("Relic secured! Checkpoint saved.", (180, 255, 220), 3.0)
                 return
+            elif obj_type == "altar" and room_key == (2, 1, 2):
+                # Temporal Altar interaction
+                interact_temporal_altar(inter_obj["x"], inter_obj["y"])
+                return
    
     if room_key == (1, 0, 1):  
         for inter_obj in interactive_objects:
             if inter_obj["type"] == "shop" and player_rect.colliderect(inter_obj["rect"].inflate(50, 50)):
                 cyber_shop_visible = True
                 return
+    
+    # Special case: Timeless Sanctuary pedestal (not in interactive_objects, but in room center)
+    if room_key == (2, 0, 2):
+        pedestal_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT // 2 - 60, 100, 120)
+        if player_rect.colliderect(pedestal_rect.inflate(50, 50)):
+            interact_timeless_pedestal(pedestal_rect.centerx, pedestal_rect.centery)
+            return
 
 def give_herbs_to_collector():
     """Handle G key to give herbs to the herb collector."""
@@ -6965,6 +7321,7 @@ while running:
         update_echoes_freeze_and_laser(dt)
         update_kael_boss(dt)
         update_gorlock_boss(dt)
+        update_waterfall_challenge(dt)
         
                                        
         if tuple(current_room_coords) == (0, 2, 0) and boss and boss["alive"]:
