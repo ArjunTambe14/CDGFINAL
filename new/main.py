@@ -973,6 +973,8 @@ gorlock_attack_cooldown = 0.0
 gorlock_last_direction = "right"
 gorlock_taunt_active = False
 gorlock_taunt_timer = 0.0
+gorlock_activated = False
+gorlock_activation_pending = False
 GORLOCK_TAUNT_DURATION = 3.0
 GORLOCK_TAUNT_COOLDOWN = 10.0
 gorlock_taunt_cooldown_timer = 0.0
@@ -1692,7 +1694,7 @@ room_data = {
                   "items": []},
     # Level 3: Ancient Ruins (Lost Civilization)
     (2, 2, 0): {"name": "Jungle Path",            "objects": [], "interactive": [], "npcs": [], "items": []},
-    (2, 2, 1): {"name": "Forgotten City",         "objects": [], "interactive": [], "npcs": [], "items": []},
+    (2, 2, 1): {"name": "Forgotten City", "objects": [{"type": "gorlock_altar", "x": 330, "y": 250, "width": 140, "height": 120}], "interactive": [], "npcs": [], "items": []},
     (2, 2, 2): {"name": "Waterfall Cave",         "objects": [], "interactive": [{"type": "waterfall_code", "x": 250, "y": 450, "width": 100, "height": 80}], "npcs": [], "items": []},
 
     (2, 1, 0): {"name": "Lava Chambers",          "objects": [], "interactive": [], "npcs": [], "items": []},
@@ -2188,7 +2190,8 @@ def enter_level_2():
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
     global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
-    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards, sword_level
+    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards, sword_level, gorlock_activated
+    global gorlock_activation_pending
     global boss_defeated, boss_drop_collected, invincibility_timer
     
     try:
@@ -2208,6 +2211,8 @@ def enter_level_2():
         player_has_weapon = False  
         using_sword_weapon = False
         sword_level = 0
+        gorlock_activated = False
+        gorlock_activation_pending = False
         player_sword_swinging = False
         player_sword_angle = 0.0
         player_sword_cooldown = 0.0
@@ -2259,7 +2264,8 @@ def enter_level_3():
     # it keeps some important items like gold keycards and time shards
     # other progress is reset so the level feels new
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
-    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, sword_level
+    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, sword_level, gorlock_activated
+    global gorlock_activation_pending
     global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
     global boss_defeated, boss_drop_collected, invincibility_timer
     global temple_puzzle_visible, temple_puzzle_tiles, temple_puzzle_attempts, temple_puzzle_solved, temple_gate_unlocked
@@ -2278,6 +2284,8 @@ def enter_level_3():
         current_room_coords[2] = 0
         player_rect.center = (SCREEN_WIDTH // 4, (SCREEN_HEIGHT * 3) // 4)
         sword_level = 0
+        gorlock_activated = False
+        gorlock_activation_pending = False
         invincibility_timer = 0.0
 
         # keep gold and keycards
@@ -2347,7 +2355,8 @@ def enter_level_3():
 
 def start_level_1():
     """Start a fresh run in Level 1."""
-    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, invincibility_timer, invincibility_brewed, sword_level
+    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, invincibility_timer, invincibility_brewed, sword_level, gorlock_activated
+    global gorlock_activation_pending
     global player_has_weapon, using_laser_weapon, current_ammo, max_ammo_count, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
     global inventory, quests, collected_gold, collected_herbs, collected_potions
@@ -2370,6 +2379,8 @@ def start_level_1():
     using_laser_weapon = False
     using_sword_weapon = False
     sword_level = 0
+    gorlock_activated = False
+    gorlock_activation_pending = False
     player_sword_swinging = False
     player_sword_angle = 0.0
     player_sword_cooldown = 0.0
@@ -3608,6 +3619,13 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         pygame.draw.rect(surface, (120, 120, 200), rect, 3)
         pygame.draw.circle(surface, (140, 200, 255), rect.center, max(10, rect.width // 4), 2)
         return rect
+    if obj_type == "gorlock_altar":
+        rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(surface, (50, 20, 20), rect)
+        pygame.draw.rect(surface, (200, 80, 80), rect, 3)
+        pygame.draw.circle(surface, (255, 120, 120), rect.center, max(12, rect.width // 4), 2)
+        interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
+        return rect
     elif obj_type == "shop":
         img = load_object_image("shop", width, height)
         if img:
@@ -4323,8 +4341,10 @@ def spawn_gorlock_boss():
     global gorlock_mace_angle, gorlock_attack_cooldown, gorlock_last_direction
     
     gorlock_stage = 1
+    boss_rect = pygame.Rect(0, 0, 200, 260)
+    boss_rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     gorlock_boss = {
-        "rect": pygame.Rect(300, 160, 200, 260),
+        "rect": boss_rect,
         "hp": 6000,
         "max_hp": 6000,
         "speed": 220,  # Similar to boss speed
@@ -4849,10 +4869,6 @@ def handle_room_entry(new_room, old_room):
             "Sage Olan: You must reach his altar and break the cycle."
         ], line_duration=3.0)
         set_message("Kael's origin revealed.", (200, 220, 255), 2.0)
-
-    # Spawn final boss Gorlock in Forgotten City
-    if new_room == (2, 2, 1) and not gorlock_defeated and gorlock_boss is None:
-        spawn_gorlock_boss()
 
     if new_room == (2, 0, 1) and not echoes_boss_defeated and echoes_miniboss is None:
         spawn_echoes_miniboss()
@@ -7092,6 +7108,18 @@ def handle_interaction():
                 # Temporal Altar interaction
                 interact_temporal_altar(inter_obj["x"], inter_obj["y"])
                 return
+            elif obj_type == "gorlock_altar" and room_key == (2, 2, 1):
+                if gorlock_defeated:
+                    set_message("The altar is silent. Gorlock is defeated.", (200, 200, 200), 2.0)
+                    return
+                if gorlock_boss is not None:
+                    set_message("Gorlock has already been awakened!", (255, 150, 120), 2.0)
+                    return
+                global gorlock_activated, gorlock_activation_pending
+                if not gorlock_activation_pending:
+                    gorlock_activation_pending = True
+                    set_message("Warning: Gorlock is extremely hard. Press Y to continue.", (255, 120, 120), 3.0)
+                return
    
     if room_key == (1, 0, 1):  
         for inter_obj in interactive_objects:
@@ -7491,6 +7519,20 @@ while running:
                     except Exception as e:
                         set_message("Error entering Level 3.", (255, 0, 0), 3.0)
                         print("enter_level_3 error:", e)
+                
+                elif event.key == pygame.K_y and gorlock_activation_pending and tuple(current_room_coords) == (2, 2, 1):
+                    gorlock_activation_pending = False
+                    gorlock_activated = True
+                    start_cutscene([
+                        "The altar thrums with violent power.",
+                        "A roar shakes the Forgotten City.",
+                        "Gorlock, the Time Eater, awakens.",
+                        "Prepare yourself."
+                    ], line_duration=2.5, on_complete=spawn_gorlock_boss)
+                
+                elif event.key == pygame.K_n and gorlock_activation_pending and tuple(current_room_coords) == (2, 2, 1):
+                    gorlock_activation_pending = False
+                    set_message("You step back from the altar.", (200, 200, 200), 2.0)
 
                 elif event.key == pygame.K_p and DEBUG_MODE:
                     # Dev hotkey: grant enough Keycards and Time Shards to open the gateway
