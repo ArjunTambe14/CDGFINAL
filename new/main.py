@@ -13,8 +13,10 @@ import json
 
 pygame.init()
                                                                          
+audio_enabled = False
 try:
     pygame.mixer.init()
+    audio_enabled = True
 except Exception:
     pass
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
@@ -206,6 +208,7 @@ SOUNDS_DIR = os.path.join(ASSETS_DIR, "sounds")
 image_cache = {}
 sound_cache = {}
 weapon_image_cache = {}
+BACKGROUND_MUSIC_FILE = os.path.join(SOUNDS_DIR, "noncopyright-music-pianos-295174.mp3")
 
 # Level 3 background tiles
 
@@ -256,6 +259,18 @@ def play_sound(snd):
                                           
 GUNSHOT_SOUND = load_sound("gunshot")
 LASER_SOUND = load_sound("laser")
+
+def start_background_music():
+    if not audio_enabled:
+        return
+    if not os.path.exists(BACKGROUND_MUSIC_FILE):
+        return
+    try:
+        pygame.mixer.music.load(BACKGROUND_MUSIC_FILE)
+        pygame.mixer.music.set_volume(0.4)
+        pygame.mixer.music.play(-1)
+    except Exception:
+        pass
 
 def _placeholder_color(name: str):
     name = name.lower()
@@ -6341,6 +6356,8 @@ try:
 except Exception:
                                                                                           
     pass
+
+start_background_music()
 
                                                                 
 while running:
