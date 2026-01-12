@@ -3770,10 +3770,14 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         return rect
     if obj_type == "temple_shop":
         rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, (60, 40, 20), rect)
-        pygame.draw.rect(surface, (200, 170, 90), rect, 3)
-        tag = small_font.render("CRAFT", True, (255, 235, 180))
-        surface.blit(tag, (rect.centerx - tag.get_width() // 2, rect.centery - tag.get_height() // 2))
+        img = load_image("objects/newcrafting_table.png", width, height)
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (60, 40, 20), rect)
+            pygame.draw.rect(surface, (200, 170, 90), rect, 3)
+            tag = small_font.render("CRAFT", True, (255, 235, 180))
+            surface.blit(tag, (rect.centerx - tag.get_width() // 2, rect.centery - tag.get_height() // 2))
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "crafting_table":
