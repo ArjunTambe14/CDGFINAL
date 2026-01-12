@@ -3955,6 +3955,18 @@ def draw_player_pointer(surface, player_rect):
     ]
     pygame.draw.polygon(surface, AIM_POINTER_COLOR, points)
 
+def draw_crosshair(surface):
+    """Draw a simple crosshair at the mouse position."""
+    x, y = pygame.mouse.get_pos()
+    color = (235, 235, 235)
+    size = 8
+    gap = 3
+    pygame.draw.line(surface, color, (x - size, y), (x - gap, y), 2)
+    pygame.draw.line(surface, color, (x + gap, y), (x + size, y), 2)
+    pygame.draw.line(surface, color, (x, y - size), (x, y - gap), 2)
+    pygame.draw.line(surface, color, (x, y + gap), (x, y + size), 2)
+    pygame.draw.circle(surface, color, (x, y), 2)
+
 def draw_npc(surface, x, y, npc_id, rescued=False):
     """Draw NPCs using images."""
     img = load_npc_image(npc_id)
@@ -7788,6 +7800,26 @@ while running:
                     cipher_visible = False
             elif game_state == "playing" and temple_puzzle_visible:
                 handle_temple_puzzle_click(mouse_pos)
+            elif (game_state == "playing" and event.button == 1
+                    and not any([upgrade_shop_visible, cyber_shop_visible, temple_shop_visible, crafting_visible,
+                                 safe_visible, maze_visible, cipher_visible, temple_puzzle_visible,
+                                 waterfall_code_puzzle_visible, waterfall_maze_visible, race_active,
+                                 dialogue_active, cutscene_active, hud_visible, quest_log_visible,
+                                 end_scene_active, echoes_player_frozen])
+                    and not (DEBUG_MODE and tuple(current_room_coords) == (2, 2, 2)
+                             and waterfall_water_rect.collidepoint(mouse_pos))):
+                if using_sword_weapon:
+                    if not try_sword_swing():
+                        set_message("Sword not ready.", (255, 200, 100), 0.6)
+                else:
+                    if shoot_bullet():
+                        set_message("Pew!", (255, 255, 0), 0.5)
+                    elif not player_has_weapon:
+                        set_message("You need a weapon! Visit the blacksmith.", (255, 200, 0), 2.0)
+                    elif reloading_active:
+                        set_message("Reloading...", (255, 200, 0), 0.5)
+                    elif current_ammo == 0:
+                        set_message("Out of ammo! Buy more from blacksmith.", (255, 0, 0), 1.0)
             elif (game_state == "playing" and DEBUG_MODE and tuple(current_room_coords) == (2, 2, 2)
                     and not any([upgrade_shop_visible, cyber_shop_visible, temple_shop_visible, crafting_visible,
                                  safe_visible, maze_visible, cipher_visible, temple_puzzle_visible,
@@ -8140,6 +8172,12 @@ while running:
         
         
         draw_bullets(screen)
+        if not any([
+            dialogue_active, cutscene_active, end_scene_active, hud_visible, quest_log_visible,
+            upgrade_shop_visible, safe_visible, maze_visible, race_active, temple_puzzle_visible,
+            crafting_visible, temple_shop_visible, cipher_visible, echoes_player_frozen,
+        ]):
+            draw_crosshair(screen)
         
        
         draw_health_bar(screen)
