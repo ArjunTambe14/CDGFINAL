@@ -1,6 +1,7 @@
                                                     
-# Chronicles of Time - Level 1
-# Free-roam adventure with bosses, NPCs, shops, and quests to reach the next era.
+ # Arjun Tambe, Shuban Nanisetty, Charanjit Kukkadapu
+# Final Project: Chronicles of Time level 1
+#Our game features an interactive based free map in which they can interact with bosses npcs and buy stuff, they have to compelte quests in order to progress to the next level.
                                                                                                                                                                                                                  
 
 import pygame
@@ -9,33 +10,33 @@ import os
 import math
 import random
 import json
+import json
                                                                                
 
 pygame.init()
                                                                          
-audio_enabled = False
 try:
     pygame.mixer.init()
-    audio_enabled = True
 except Exception:
     pass
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
-# Pygame setup and keep cwd in the game folder (audio can fail on some systems).
+# quick setup for pygame and working directory
+# this makes sure the display and audio are initialised and we run from the game folder
+# small note sometimes audio fails on some systems but game still runs
                  
-# Core game constants
+#  game constants
 SCREEN_WIDTH = 800    
 SCREEN_HEIGHT = 800
 MAP_COLS = 3
 MAP_ROWS = 3
 TOTAL_LEVELS = 3
-# Debug overlays and invisible walls
-DEBUG_MODE = True
+DEBUG_MODE = True # this is for debugging and adding invisible barriers so that we can see where they are
 DEBUG_SKIP_LEVEL2 = True  
 SAVE_DIR = "saves"
-# Level 2 spawn point
+# Level 2 spawn point 
 LEVEL2_SPAWN_POINT = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
-# Level 2: Cyberpunk future
-                                               
+# ------------ LEVEL 2 (CYBERPUNK) ------------
+
 LEVEL_2_NAME = "The Neon City (Cyberpunk Future)"
 LEVEL_2_BG_MAP = {                                                     
     (0,0): "rooftop_hideout",
@@ -72,18 +73,13 @@ PLAYER_SPRITE_WIDTH = 80
 PLAYER_SPRITE_HEIGHT = 100
 player_move_speed = 7
 player_stat_multiplier = 1.0
+player_base_move_speed = 7
+player_base_stat_multiplier = 1.0
 current_room_coords = [0, 0, 0]
 previous_room_coords = tuple(current_room_coords)
 player_facing = "right"  
 PLAYER_ANIM_SPEED = 0.08                                 
 player_frames = {}
-GUN_SPRITE_PATH = "objects/ak24.png"
-GUN_SPRITE_WIDTH = 70
-GUN_SPRITE_HEIGHT = 28
-GUN_OFFSET_X = 4
-GUN_OFFSET_Y = 10
-GUN_GRIP_X = 14
-GUN_GRIP_Y = 14
 player_state = "idle"
 player_frame_index = 0
 player_frame_timer = 0.0
@@ -201,16 +197,37 @@ upgrade_costs = {
 }
                       
 ARMOR_MAX_LEVEL = 5
+
+SWORD_MAX_LEVEL = 12
     
                                                      
-ASSETS_DIR = "assets"
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+if DEBUG_MODE:
+    _asset_checks = [
+        "projectiles/timedmg.png",
+        "objects/waterfall_code.png",
+        "npcs/kael.png",
+        "objects/relic.png",
+        "objects/gorlock_altar.png",
+        "objects/crafting_table.png",
+        "npcs/cave_guardian.png",
+    ]
+    print("ASSETS_DIR:", ASSETS_DIR)
+    for _path in _asset_checks:
+        _full = os.path.join(ASSETS_DIR, _path)
+        exists = os.path.exists(_full)
+        print(f"ASSET {'OK' if exists else 'MISSING'}: {_full}")
+        if exists:
+            try:
+                pygame.image.load(_full)
+                print(f"ASSET LOAD OK: {_full}")
+            except Exception as e:
+                print(f"ASSET LOAD FAIL: {_full} -> {e!r}")
 SOUNDS_DIR = os.path.join(ASSETS_DIR, "sounds")
 image_cache = {}
 sound_cache = {}
-weapon_image_cache = {}
-BACKGROUND_MUSIC_FILE = os.path.join(SOUNDS_DIR, "noncopyright-music-pianos-295174.mp3")
 
-# Level 3 background tiles
+# Level 3 background map 
 
 LEVEL_3_BG_MAP = {
 
@@ -250,6 +267,7 @@ def load_sound(name):
     return None
 
 def play_sound(snd):
+    """Play a sound safely."""
     if snd:
         try:
             snd.play()
@@ -260,19 +278,8 @@ def play_sound(snd):
 GUNSHOT_SOUND = load_sound("gunshot")
 LASER_SOUND = load_sound("laser")
 
-def start_background_music():
-    if not audio_enabled:
-        return
-    if not os.path.exists(BACKGROUND_MUSIC_FILE):
-        return
-    try:
-        pygame.mixer.music.load(BACKGROUND_MUSIC_FILE)
-        pygame.mixer.music.set_volume(0.4)
-        pygame.mixer.music.play(-1)
-    except Exception:
-        pass
-
 def _placeholder_color(name: str):
+    """Pick a sensible placeholder color based on asset name."""
     name = name.lower()
     if "background" in name:
         return (70, 100, 140)
@@ -307,6 +314,7 @@ def _placeholder_color(name: str):
     return (140, 140, 140)
 
 def create_placeholder(name, width, height):
+    """Create a non-magenta placeholder so missing assets are less jarring."""
     w = width or 50
     h = height or 50
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -316,6 +324,7 @@ def create_placeholder(name, width, height):
     return surf
 
 def _auto_transparent_bg(img):
+    """If an image lacks alpha, treat the corner color as a colorkey."""
     if img.get_flags() & pygame.SRCALPHA or img.get_alpha() is not None:
         return img
     w, h = img.get_size()
@@ -333,6 +342,10 @@ def _auto_transparent_bg(img):
     return img
 
 def load_image(name, width=None, height=None):
+    # image loader caches images and makes nice placeholders when missing
+    # sometimes assets are not included so we draw a simple box with name
+    # this helps when testing without the full art bundle
+    """Image loader with caching and readable placeholders."""
     cache_key = f"{name}_{width}x{height}" if width and height else name
     
     if cache_key in image_cache:
@@ -372,17 +385,11 @@ def load_image(name, width=None, height=None):
     image_cache[cache_key] = fallback
     return fallback
 
-def _get_ak24_sprite(direction):
-    cache_key = f"ak24_{direction}_{GUN_SPRITE_WIDTH}x{GUN_SPRITE_HEIGHT}"
-    if cache_key in weapon_image_cache:
-        return weapon_image_cache[cache_key]
-    img = load_image(GUN_SPRITE_PATH, GUN_SPRITE_WIDTH, GUN_SPRITE_HEIGHT)
-    if direction == "left":
-        img = pygame.transform.flip(img, True, False)
-    weapon_image_cache[cache_key] = img
-    return img
-
 def load_smart_bg(level, row, col):
+    """Return Surface for any level, or None if no file."""
+    # load_smart_bg picks the best background for the current level and tile
+    # it will fallback to a neutral background when a file is missing
+    # this keeps the game running even if some tiles are not drawn yet
     if level == 0:                              
         background_mapping = {
             (0, 0, 0): "village",
@@ -405,6 +412,7 @@ def load_smart_bg(level, row, col):
             return load_image(f"backgrounds/{filename}.png", SCREEN_WIDTH, SCREEN_HEIGHT)
         return None
     elif level == 2:
+        # Use LEVEL_3_BG_MAP which maps (row, col) -> scene name
         filename = LEVEL_3_BG_MAP.get((row, col))
         if filename:
             return load_image(f"backgrounds/{filename}.png", SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -414,6 +422,7 @@ def load_smart_bg(level, row, col):
 
 
 def _load_player_sheet(filename):
+    """Slice a horizontal sprite sheet into frames scaled to the player rect."""
     sheet_path = os.path.join(ASSETS_DIR, "characters", "New Folder With Items", filename)
     try:
         sheet = pygame.image.load(sheet_path).convert_alpha()
@@ -433,6 +442,7 @@ def _load_player_sheet(filename):
     return frames
 
 def _ensure_player_frames():
+    """Load and cache player idle/run animations (left/right)."""
     global player_frames
     if player_frames:
         return player_frames
@@ -455,6 +465,7 @@ def _ensure_player_frames():
     return player_frames
 
 def load_player_image(direction="right"):
+    """Load player sprite based on direction (only left/right supported)."""
     _ensure_player_frames()
     key = f"idle_{direction}"
     frames = player_frames.get(key) or []
@@ -464,6 +475,7 @@ def load_object_image(obj_type, width, height):
     return load_image(f"objects/{obj_type}.png", width, height)
 
 def load_item_image(item_type):
+    """Load items with larger size for keys, gold, and herbs."""
     if item_type == "key":
         return load_image(f"items/{item_type}.png", 45, 45)  
     elif item_type == "gold":
@@ -474,11 +486,14 @@ def load_item_image(item_type):
         return load_image(f"items/{item_type}.png", 50, 50)  
     elif item_type == "keycard":
         return load_image(f"items/keycard.png", 45, 45)
+    elif item_type == "relic":
+        return load_image("objects/relic.png", 45, 45)
     elif item_type == "credit":
         return load_image(f"items/credit.png", 36, 36)
     return load_image(f"items/{item_type}.png", 25, 25)
 
 def get_npc_size(npc_type):
+    """Return sprite size overrides for specific NPCs."""
     if npc_type == "goblin":
         return (50, 70)
     elif npc_type == "boss1":
@@ -499,6 +514,8 @@ def load_npc_image(npc_type):
     if npc_type in ["alchemist", "apprentice"]:
         size = get_npc_size(npc_type)
         return load_image("npcs/TempleAlchemist-removebg-preview.png", size[0], size[1])
+    if npc_type == "kael":
+        return load_image("npcs/kael.png", 120, 150)
     size = get_npc_size(npc_type)
                                                                                            
     primary = f"npcs/{npc_type}.png"
@@ -512,7 +529,24 @@ def load_npc_image(npc_type):
     return load_image(primary, size[0], size[1])
 
 def load_axe_image():
-    return load_image("npcs/axe.png", 90, 50) 
+    """Load the boss axe image."""
+    return load_image("npcs/axe.png", 90, 50)
+
+def load_cave_guardian_image():
+    """Load cave guardian sprite."""
+    return load_image("npcs/cave_guardian.png", 36, 36)
+
+def load_waterfall_code_image():
+    """Load waterfall code lock terminal."""
+    return load_image("objects/waterfall_code.png", 100, 80)
+
+def load_gorlock_altar_image():
+    """Load Gorlock altar spawner."""
+    return load_image("objects/gorlock_altar.png", 140, 120)
+
+def load_crafting_table_image():
+    """Load crafting table interactive object."""
+    return load_image("objects/crafting_table.png", 140, 90)
 
              
 health = 100
@@ -523,6 +557,17 @@ GOBLIN_CONTACT_DAMAGE = 10
 goblin_contact_cooldown = 0.0  
 player_speed_boost_timer = 0.0
 player_electrified_timer = 0.0                                          
+INVINCIBILITY_DURATION = 120.0
+invincibility_timer = 0.0
+invincibility_brewed = False
+invincibility_prev_health = None
+HEALTH_POTION_SHOP_COST = 15
+INVINCIBILITY_HERB_COST = 2
+SWORD_DAMAGE_BASE = 18
+SWORD_DAMAGE_GROWTH = 1.45
+SWORD_UPGRADE_BASE_COST = 25
+SWORD_UPGRADE_GROWTH = 1.6
+sword_level = 0
                         
 TIMEBANDIT_BASE_HP = 50
 TIMEBANDIT_BASE_DAMAGE = 10
@@ -535,10 +580,30 @@ inventory = {
     "Herbs": 0,
     "Keys": 0,
     "Time Shards": 0,
-    "Keycards": 0
+    "Keycards": 0,
+    "Relics": 0
 }
                                               
 inventory.setdefault("Ammo Packs", 0)
+
+def is_player_invincible():
+    return invincibility_timer > 0.0
+
+def get_sword_damage():
+    scaled = SWORD_DAMAGE_BASE * (SWORD_DAMAGE_GROWTH ** max(0, sword_level - 1))
+    return int(scaled * player_stat_multiplier)
+
+def apply_player_damage(amount, message=None, color=(255, 0, 0), duration=1.2):
+    """Apply player damage unless invincible."""
+    global health
+    if invincibility_timer > 0.0:
+        return False
+    if amount <= 0:
+        return False
+    health = max(0, health - int(amount))
+    if message:
+        set_message(message, color, duration)
+    return True
                                                       
                                                                        
 quests = {
@@ -569,6 +634,7 @@ collected_potions = set()
 collected_keys = set()
 collected_timeshards = set()
 collected_credits = set()
+collected_relics = set()
 
               
 safe_code = "4231" 
@@ -602,6 +668,7 @@ def start_cipher():
     set_message("Data Hub activated: decode the message", (0, 200, 255), 3.0)
 
 def handle_cipher_key(event):
+    """Handle key input while cipher overlay is active."""
     global cipher_input, cipher_visible
                
     if event.key == pygame.K_BACKSPACE:
@@ -633,6 +700,7 @@ def handle_cipher_key(event):
         cipher_input += event.unicode
 
 def handle_compiler_key(event):
+    """Handle key input while compiler mini-quest is active."""
     global compiler_input, compiler_quest_active, compiler_cursor_timer, compiler_cursor_visible, compiler_quest_completed
                                       
     if event.key == pygame.K_ESCAPE:
@@ -681,6 +749,7 @@ def handle_compiler_key(event):
         compiler_input += event.unicode
 
 def draw_compiler_ui(surface):
+    """Render a simple code-editor style overlay for the mini-quest."""
     global compiler_input, compiler_cursor_timer, compiler_cursor_visible
                                  
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -748,19 +817,22 @@ race_time_limit_sec = 35.0
 race_warning_timer = 0.0
 race_car_state = {"x": 0.0, "y": 0.0, "w": 22, "h": 12, "speed": 220.0}
 RACE_TRACK_BG = "backgrounds/racetrack.png"
-# Track obstacles (x, y, w, h), tweak to match the image.
+# Edit these to match obstacles in the track image (x, y, w, h).
 RACE_BOUNDARY_BOXES = [
     
 ]
 
 def _race_track_rects():
     outer = pygame.Rect(140, 120, 520, 560)
+    # reduce the inner inflation so the drivable track is wider and less likely
+    # to trigger 'Off the road' when the car visually sits inside the track.
     inner = outer.inflate(-160, -160)
     start_line = pygame.Rect(SCREEN_WIDTH // 2 - 70, outer.bottom - 24, 140, 12)
     checkpoint = pygame.Rect(SCREEN_WIDTH // 2 - 70, outer.top + 12, 140, 12)
     return outer, inner, start_line, checkpoint
 
 def _race_boundary_rects():
+    # Boundaries removed: return an empty list so the race has no crash boxes.
     return []
 
 def _reset_race_car():
@@ -901,14 +973,48 @@ jungle_trap_rects = [
     pygame.Rect(320, 520, 110, 90),
 ]
 jungle_proximity_trap = pygame.Rect(600, 520, 120, 120)
+jungle_spike_hit_cd = 0.0
+jungle_spike_rects = [
+    pygame.Rect(90, 90, 80, 40),
+    pygame.Rect(210, 140, 90, 40),
+    pygame.Rect(340, 110, 80, 40),
+    pygame.Rect(470, 140, 90, 40),
+    pygame.Rect(600, 110, 80, 40),
+    pygame.Rect(120, 240, 90, 40),
+    pygame.Rect(260, 260, 80, 40),
+    pygame.Rect(400, 240, 90, 40),
+    pygame.Rect(540, 260, 80, 40),
+    pygame.Rect(170, 360, 90, 40),
+    pygame.Rect(300, 380, 90, 40),
+    pygame.Rect(450, 360, 90, 40),
+    pygame.Rect(600, 380, 80, 40),
+    pygame.Rect(120, 500, 90, 40),
+    pygame.Rect(260, 520, 90, 40),
+    pygame.Rect(420, 500, 90, 40),
+    pygame.Rect(560, 520, 90, 40),
+    pygame.Rect(200, 640, 100, 40),
+    pygame.Rect(360, 660, 100, 40),
+    pygame.Rect(520, 640, 100, 40),
+    pygame.Rect(50, 180, 80, 40),
+    pygame.Rect(690, 180, 80, 40),
+    pygame.Rect(80, 300, 90, 40),
+    pygame.Rect(680, 300, 90, 40),
+    pygame.Rect(100, 440, 90, 40),
+    pygame.Rect(640, 440, 90, 40),
+    pygame.Rect(260, 720, 100, 40),
+    pygame.Rect(420, 720, 100, 40),
+]
 time_spirits = []
 
-cave_entrance_revealed = False
 cave_guardians = []
 cave_relic_available = False
 cave_relic_collected = False
 cave_blocker_rect = pygame.Rect(520, 0, 280, 220)
-cave_reveal_rect = pygame.Rect(680, 80, 90, 90)
+waterfall_water_rect = pygame.Rect(75, 100, 620, 640)
+waterfall_water_dragging = False
+waterfall_water_resizing = False
+waterfall_water_drag_offset = (0, 0)
+WATERFALL_WATER_SLOW = 0.6
 
 crafting_visible = False
 crafting_uses_left = 3
@@ -936,21 +1042,53 @@ echoes_player_frozen_pos = (0, 0)
 echoes_laser_timer = 0.0
 echoes_laser_active = False
 
-# Gorlock, final boss in the Forgotten City
+# Gorlock - Final Boss (Forgotten City)
 gorlock_boss = None
 gorlock_defeated = False
 gorlock_stage = 1
-gorlock_mace_state = None
-gorlock_mace_timer = 0.0
+gorlock_mace_swinging = False
+gorlock_mace_angle = 0
+gorlock_mace_thrown = []
+gorlock_attack_cooldown = 0.0
+gorlock_last_direction = "right"
 gorlock_taunt_active = False
 gorlock_taunt_timer = 0.0
-gorlock_taunt_cd = 30.0
-gorlock_mace_projectiles = []
-gorlock_berserk = False
+gorlock_activated = False
+gorlock_activation_pending = False
+GORLOCK_TAUNT_DURATION = 3.0
+GORLOCK_TAUNT_COOLDOWN = 10.0
+gorlock_taunt_cooldown_timer = 0.0
 
 kael_boss = None
 kael_defeated = False
+kael_key_given = False
 kael_phase = 1
+
+# Waterfall Cave - Timing Challenge
+waterfall_platforms = []
+waterfall_timer = 0.0
+waterfall_challenge_active = False
+waterfall_challenge_complete = False
+waterfall_next_spawn_time = 0.0
+
+# Waterfall Cave - Code Puzzle
+waterfall_code_puzzle_visible = False
+waterfall_code_input = ""
+waterfall_code_correct = "landa"
+waterfall_code_solved = False
+waterfall_code_tile_rect = None
+waterfall_maze_visible = False
+waterfall_maze_timer = 0.0
+waterfall_maze_solution = [(400, 350), (400, 450), (500, 450), (500, 300), (300, 300), (300, 150), (600, 150)]
+waterfall_maze_player_pos = (400, 350)
+
+# Temple Code Reward
+temple_code_obtained = False
+temple_code = "landa"
+
+# Temporal Altar - Ritual System
+temporal_altar_activated = False
+kael_origin_countdown = 30.0
 
 cutscene_active = False
 cutscene_lines = []
@@ -958,6 +1096,8 @@ cutscene_index = 0
 cutscene_timer = 0.0
 cutscene_line_duration = 2.5
 cutscene_on_complete = None
+end_scene_active = False
+end_scene_timer = 0.0
 
 kael_origin_revealed = False
 timeline_restored = False
@@ -971,7 +1111,9 @@ hud_message_timer = 0.0
 hud_message_color = (255, 255, 255)
 
                 
-# NPC dialogue lines per room, kept simple to edit.
+# npc dialogue lines for characters in rooms
+# these are the lines that npcs will say when you interact with them
+# written in a plain human style so you can edit easily
 npc_dialogues = {
     (0, 0, 0, "elder"): [
         "Elder Rowan: Welcome, Arin. You've arrived just in time.",
@@ -1026,9 +1168,9 @@ npc_dialogues = {
     ],
     (2, 1, 1, "alchemist"): [
         "Temple Alchemist: Welcome to the ruins, traveler.",
-        "Temple Alchemist: Our potion uses 2 herbs and 1 gold per brew.",
-        "Temple Alchemist: Use the crafting table and press C to mix.",
-        "Temple Alchemist: Each session has limited uses, so plan ahead.",
+        "Temple Alchemist: Health potions cost gold, invincibility brews cost 2 herbs.",
+        "Temple Alchemist: Use the plaza table to buy potions.",
+        "Temple Alchemist: Supplies are limited, so plan ahead.",
     ],
     (2, 1, 1, "apprentice"): [
         "Apprentice Brewer: The mix is simple but precise.",
@@ -1064,6 +1206,7 @@ GOBLIN_WAVES = {
 }
 
 def _init_goblin_rooms():
+    """Prepare goblin wave state for configured rooms."""
     for room_key, waves in GOBLIN_WAVES.items():
         goblin_rooms[room_key] = {
             "waves": waves,
@@ -1090,6 +1233,13 @@ timebandit_rooms = {}
 drones = []                                     
 
 def init_drones():
+    """Initialize drone entities from room_data objects.
+    Drones are defined as objects of type 'drone' in room_data; we read those
+    and create runtime state entries so they move independently and scan.
+    """
+    # drones patrol and scan the room for the player
+    # boss drones are larger and shoot lasers when they spot you
+    # normal drones will call reinforcements when they see you
     drones.clear()
     for room_key, info in room_data.items():
         for obj in info.get("objects", []):
@@ -1150,8 +1300,13 @@ def init_drones():
         drones.append(state)
 
 def update_drones(dt):
+    # update_drones runs every frame and moves each drone
+    # they pick random targets and sweep a red cone to look for the player
+    # when a drone sees you normal ones spawn reinforcements and boss drones shoot lasers
+    """Update all drones: movement, scanning, and deployment when player detected."""
     dt_sec = dt / 1000.0
     room_key = tuple(current_room_coords)
+    # allow the drone updater to trigger proximity dialogue for the Time Guide
     global current_dialogue, dialogue_active, dialogue_index, time_guide_offer_level3
     
     for d in drones:
@@ -1160,6 +1315,7 @@ def update_drones(dt):
 
                                                             
                                                       
+        # only pick a random roaming target when not currently chasing the player
         if (not d.get("target") or random.random() < 0.004) and not d.get("chasing"):
             angle = random.random() * math.pi * 2
             r = random.uniform(40, 140)
@@ -1214,6 +1370,7 @@ def update_drones(dt):
 
                                                          
         d["scan_timer"] += dt_sec * 1.5
+        # tick down laser cooldown separately
         if d.get("is_boss"):
             d["laser_cooldown"] = max(0.0, d.get("laser_cooldown", 0.0) - dt_sec)
 
@@ -1227,18 +1384,25 @@ def update_drones(dt):
             angle_to_player = math.atan2(dy, dx)
             diff = (angle_to_player - d["facing"] + math.pi) % (2*math.pi) - math.pi
             if abs(diff) <= d["scan_angle"]/2:
+                # if boss then engage chase behavior rather than spawning reinforcements
                 if d.get("is_boss"):
                     d["chasing"] = True
                     d["lost_timer"] = 0.0
+                    # set target to player center so drone will pursue
                     d["target"] = (player_rect.centerx - d.get("w",0)/2, player_rect.centery - d.get("h",0)/2)
+                    # if close enough and laser ready then fire a volley of fast blue orbs
                     if dist <= d.get("laser_range", 240) and d.get("laser_cooldown", 0.0) <= 0.0:
+                        # spawn a row of blue projectiles aimed at the player like the main boss
                         try:
                             global active_bullets
+                            # compute normalized direction toward player
                             ang = math.atan2(dy, dx)
                             base_dx = math.cos(ang)
                             base_dy = math.sin(ang)
+                            # perpendicular vector for row offsets
                             perp_x = -base_dy
                             perp_y = base_dx
+                            # row offsets in pixels from center
                             offsets = [-80, -40, -10, 20, 50]
                             speed = 32.0
                             dmg = d.get("laser_damage", 50)
@@ -1264,20 +1428,27 @@ def update_drones(dt):
                 else:
                     if d.get("detect_cooldown", 0.0) <= 0.0:
                         d["detect_count"] += 1
+                        # spawn 2-3 enemies per detection
                         spawn_count = random.randint(2, 3)
                         deploy_enemies_from_drone(d, spawn_count)
+                        # set 1 second cooldown before next detection
                         d["detect_cooldown"] = 1.0
 
+        # if the boss is chasing update its target each frame to track the player
         if d.get("is_boss") and d.get("chasing"):
+            # update target to follow player center
             d["target"] = (player_rect.centerx - d.get("w",0)/2, player_rect.centery - d.get("h",0)/2)
+            # if player is outside detection cone increment lost timer
             if dist > d["scan_range"] or abs(diff) > d["scan_angle"]/2:
                 d["lost_timer"] = d.get("lost_timer", 0.0) + dt_sec
             else:
                 d["lost_timer"] = 0.0
+            # if lost for more than 3 seconds stop chasing
             if d.get("lost_timer", 0.0) > 3.0:
                 d["chasing"] = False
 
 def draw_drones(surface):
+    """Draw drones for current room with radar triangle sweep."""
     room_key = tuple(current_room_coords)
     for d in drones:
         if tuple(d["room_key"]) != room_key:
@@ -1302,6 +1473,7 @@ def draw_drones(surface):
         pygame.draw.polygon(radar_surf, (255, 0, 0, 60), [(cx, cy), left, right])
         pygame.draw.polygon(radar_surf, (255, 0, 0, 160), [(cx, cy), left, right], 2)
         surface.blit(radar_surf, (0,0))
+        # Draw boss HP bar when this drone is a boss
         if d.get("is_boss") and d.get("hp") is not None and d.get("alive", True):
             try:
                 bar_w = 300
@@ -1318,6 +1490,9 @@ def draw_drones(surface):
                 pass
 
 def deploy_enemies_from_drone(drone, count):
+    """Deploy `count` time-bandit enemies near the drone's position into the room's active list.
+    Each detection increases `count` so more enemies are sent on repeated detections.
+    """
     room_key = tuple(drone["room_key"])
                                                                                       
     if compiler_quest_active:
@@ -1328,6 +1503,7 @@ def deploy_enemies_from_drone(drone, count):
         state = {"waves": [], "wave_index": 0, "active": [], "respawn": 0.0, "key_given": False}
         timebandit_rooms[room_key] = state
 
+    # enforce a max cap in the factory exterior (room 1,1,2)
     MAX_FACTORY_TIMEBANDITS = 6
     if room_key == (1, 1, 2):
         current_alive = sum(1 for tb in state.get("active", []) if tb.get("alive", True))
@@ -1353,6 +1529,10 @@ def deploy_enemies_from_drone(drone, count):
 
 
 def _init_timebandits():
+    # setup time bandit spawns in configured rooms
+    # this builds room state that tracks active waves and respawn timers
+    # useful so the drone system can deploy them later
+    """Prepare time-bandit wave state for configured rooms."""
     for room_key, waves in TIMEBANDIT_WAVES.items():
         timebandit_rooms[room_key] = {
             "waves": waves,
@@ -1363,7 +1543,9 @@ def _init_timebandits():
         }
 
 
-# Room data: layout, objects, NPCs, and items for every room.
+# room_data holds layout for all rooms objects npcs and items
+# this is a big dictionary that defines what each room contains
+# keep it organised so we can find places to add items or npcs
 _init_timebandits()
 
                                                                        
@@ -1593,9 +1775,12 @@ room_data = {
                 "interactive": []
                 , "npcs": [],
                   "items": []},
-    (2, 2, 0): {"name": "Jungle Path",            "objects": [], "interactive": [], "npcs": [], "items": []},
-    (2, 2, 1): {"name": "Forgotten City",         "objects": [], "interactive": [], "npcs": [], "items": []},
-    (2, 2, 2): {"name": "Waterfall Cave",         "objects": [], "interactive": [], "npcs": [], "items": []},
+    # Level 3: Ancient Ruins (Lost Civilization)
+    (2, 2, 0): {"name": "Jungle Path",            "objects": [], "interactive": [], "npcs": [], "items": [
+        {"type": "relic", "x": 175, "y": 30, "id": "relic_jungle"}
+    ]},
+    (2, 2, 1): {"name": "Forgotten City", "objects": [{"type": "gorlock_altar", "x": 338, "y": 324, "width": 140, "height": 120}], "interactive": [], "npcs": [], "items": []},
+    (2, 2, 2): {"name": "Waterfall Cave",         "objects": [], "interactive": [{"type": "waterfall_code", "x": 512, "y": 262, "width": 100, "height": 80}], "npcs": [], "items": []},
 
     (2, 1, 0): {"name": "Lava Chambers",          "objects": [], "interactive": [], "npcs": [], "items": []},
     (2, 1, 1): {"name": "Ruins Plaza",           "objects": [], "interactive": [
@@ -1609,10 +1794,12 @@ room_data = {
         {"type": "altar", "x": 330, "y": 250, "width": 140, "height": 120}
     ], "interactive": [], "npcs": [], "items": []},
 
+    # bottom row (row=2): temple entrance is bottom-left
     (2, 0, 0): {"name": "Temple Entrance",        "objects": [
         {"type": "temple_gate", "x": 740, "y": 250, "width": 40, "height": 240}
     ], "interactive": [
-        {"type": "temple_puzzle", "x": 320, "y": 320, "width": 160, "height": 140}
+        {"type": "temple_puzzle", "x": 320, "y": 320, "width": 160, "height": 140},
+        {"type": "temple_shop", "x": 40, "y": 620, "width": 140, "height": 120}
     ], "npcs": [], "items": []},
     (2, 0, 1): {"name": "Hall of Echoes",        "objects": [], "interactive": [], "npcs": [], "items": []},
     (2, 0, 2): {"name": "Timeless Sanctuary",    "objects": [{"type": "invisible", "x": 740, "y": 30, "width": 125, "height": 325},
@@ -1623,14 +1810,13 @@ room_data = {
                                                             {"type":"invisible","x":500,"y":745,"width":325,"height":55},
                                                            {"type":"invisible","x":10,"y":745,"width":325,"height":55},
                                                             {"type":"invisible","x":0,"y":450,"width":55,"height":325},
-                                                             ], "interactive": [
-        {"type": "temple_shop", "x": 330, "y": 340, "width": 140, "height": 120}
-    ], "npcs": [], "items": []},
+                                                             ], "interactive": [], "npcs": [], "items": []},
 }
 
 goblin_states = {}
 
 def _init_goblins():
+    """Seed legacy goblin state from room data (initial wave positions)."""
     forest_key = (0, 0, 2)
     forest_info = room_data.get(forest_key, {})
     spawn = []
@@ -1644,6 +1830,12 @@ _init_goblins()
 
 
 def _init_npc_states():
+    # initialize npc_states so every npc gets a runtime entry
+    # this lets npcs roam and pause when you talk to them
+    # we use a unique key so duplicated npc types dont collide
+    """Initialize dynamic npc state entries for every NPC in room_data.
+    Keys: "level_row_col_id_index" to uniquely identify duplicates.
+    """
     npc_states.clear()
     for room_key, info in room_data.items():
         npcs_list = info.get("npcs", [])
@@ -1701,6 +1893,7 @@ _seed_level2_credits()
 
                   
 def init_boss():
+    """Initialize the boss in the throne room."""
     global boss, boss_health, boss_max_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_defeated, boss_drop_collected, boss_phase, boss_thrown_axes, boss_throw_cooldown
     boss_rect = pygame.Rect(350, 300, 100, 120)
     boss = {
@@ -1720,6 +1913,7 @@ def init_boss():
     boss_throw_cooldown = 0
 
 def update_boss(dt):
+    """Update boss behavior and attacks."""
     global boss_health, boss_attack_cooldown, boss_axe, boss_axe_angle, boss_axe_swinging, health, boss_defeated, boss_phase, boss_thrown_axes, boss_throw_cooldown
     
     if not boss or not boss["alive"]:
@@ -1785,13 +1979,13 @@ def update_boss(dt):
                 damage = boss_axe_damage - (armor_level * 5)  
                 if boss_phase == 2:
                     damage += 10  
-                health = max(0, health - damage)
-                set_message(f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
+                apply_player_damage(damage, f"Boss hit you for {damage} damage!", (255, 0, 0), 1.5)
     
 
     update_thrown_axes(dt_sec)
 
 def throw_axe():
+    """Boss throws an axe towards the player in phase 2."""
     if not boss:
         return
     
@@ -1813,6 +2007,7 @@ def throw_axe():
 
                                           
 def draw_inventory_hud(surface):
+    """Draw a modern, organized inventory HUD that's always visible."""
                                                        
     hud_height = 110
     hud_bg = pygame.Surface((SCREEN_WIDTH, hud_height), pygame.SRCALPHA)
@@ -1845,6 +2040,9 @@ def draw_inventory_hud(surface):
                  
     armor_text = small_font.render(f"ARMOR: LVL {armor_level}", True, (200, 255, 200))
     surface.blit(armor_text, (x_start + 20, y_start + 40))
+    if invincibility_timer > 0.0:
+        inv_text = small_font.render(f"INVINCIBLE {invincibility_timer:.0f}s", True, (120, 220, 255))
+        surface.blit(inv_text, (x_start + 20, y_start + 55))
     
                               
     section2_x = x_start + section_width + 10
@@ -1938,13 +2136,13 @@ def draw_inventory_hud(surface):
     herb_text = small_font.render(f"  {inventory['Herbs']}", True, (50, 255, 50))
     surface.blit(herb_text, (section4_x + 40, y_start + 42))
     
-                    
-    if inventory['Health Potions'] > 0 and health < max_health:
+    if inventory['Health Potions'] > 0:
         hint_text = small_font.render("Press H to use", True, (200, 200, 200))
         surface.blit(hint_text, (section4_x + 15, y_start + 60))
 
 
 def draw_quick_inventory(surface):
+    """Draw a quick-access inventory bar at the bottom."""
     if not hud_visible:                                       
         return
     
@@ -2001,12 +2199,13 @@ def draw_quick_inventory(surface):
 
                                  
 def draw_enhanced_weapon_hud(surface):
+    """Draw an enhanced weapon HUD with more detailed information."""
     if not player_has_weapon and not using_sword_weapon:
         return
     
     
-    panel_width = 180
-    panel_height = 100
+    panel_width = 160 if using_sword_weapon else 180
+    panel_height = 70 if using_sword_weapon else 100
     panel_x = 10  
     panel_y = 10  
     
@@ -2018,11 +2217,11 @@ def draw_enhanced_weapon_hud(surface):
     
                       
     if using_sword_weapon:
-        weapon_type_text = font.render("SWORD", True, (200, 255, 200))
-        surface.blit(weapon_type_text, (panel_x + 10, panel_y + 10))
+        weapon_type_text = small_font.render("SWORD", True, (200, 255, 200))
+        surface.blit(weapon_type_text, (panel_x + 10, panel_y + 8))
         status = "READY" if player_sword_cooldown <= 0 else "COOLDOWN"
-        status_text = font.render(status, True, (255, 255, 255))
-        surface.blit(status_text, (panel_x + 10, panel_y + 40))
+        status_text = small_font.render(status, True, (255, 255, 255))
+        surface.blit(status_text, (panel_x + 10, panel_y + 32))
         return
     weapon_color = (0, 200, 255) if using_laser_weapon else (255, 200, 0)
     weapon_type_text = font.render("LASER" if using_laser_weapon else "FIREARM", True, weapon_color)
@@ -2072,11 +2271,13 @@ def draw_enhanced_weapon_hud(surface):
         pygame.draw.rect(surface, (255, 50, 50), (ammo_bar_x, ammo_bar_y, reload_bar_width, 3))
 
 def enter_level_2():
+    """Warp player to Level-2 Rooftop Hideout, reset game state for level 2."""
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
     global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
-    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
-    global boss_defeated, boss_drop_collected
+    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards, collected_relics, sword_level, gorlock_activated
+    global gorlock_activation_pending
+    global boss_defeated, boss_drop_collected, invincibility_timer
     
     try:
                                                     
@@ -2090,9 +2291,13 @@ def enter_level_2():
                                                               
         max_health = 200
         health = max_health
+        invincibility_timer = 0.0
         
         player_has_weapon = False  
         using_sword_weapon = False
+        sword_level = 0
+        gorlock_activated = False
+        gorlock_activation_pending = False
         player_sword_swinging = False
         player_sword_angle = 0.0
         player_sword_cooldown = 0.0
@@ -2107,7 +2312,8 @@ def enter_level_2():
             "Health Potions": 1,  
             "Herbs": 0,
             "Keys": 0,
-            "Time Shards": 0
+            "Time Shards": 0,
+            "Relics": inventory.get("Relics", 0)
         }
         
         collected_gold.clear()
@@ -2115,6 +2321,7 @@ def enter_level_2():
         collected_potions.clear()
         collected_keys.clear()
         collected_timeshards.clear()
+        collected_relics.clear()
         
         boss_defeated = False
         boss_drop_collected = False
@@ -2137,31 +2344,48 @@ def enter_level_2():
 
 
 def enter_level_3():
+    """Warp player to Level-3 (placeholder) - basic setup for next level.
+    This preserves the player's gold and keycards but resets some level-appropriate state.
+    """
+    # enter_level_3 moves the player to the next big area
+    # it keeps some important items like gold keycards and time shards
+    # other progress is reset so the level feels new
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
-    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests
-    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards
-    global boss_defeated, boss_drop_collected
+    global player_has_weapon, current_ammo, max_ammo_count, inventory, quests, sword_level, gorlock_activated
+    global gorlock_activation_pending
+    global collected_gold, collected_herbs, collected_potions, collected_keys, collected_timeshards, collected_relics
+    global boss_defeated, boss_drop_collected, invincibility_timer
     global temple_puzzle_visible, temple_puzzle_tiles, temple_puzzle_attempts, temple_puzzle_solved, temple_gate_unlocked
+    global invincibility_brewed
     global jungle_trap_timer, jungle_traps_active, jungle_cleared, time_spirits
-    global cave_entrance_revealed, cave_guardians, cave_relic_available, cave_relic_collected
+    global cave_guardians, cave_relic_available, cave_relic_collected
     global crafting_visible, crafting_uses_left, crafting_ready_confirmed
     global echoes_miniboss, echoes_boss_defeated, echoes_arena_locked, echoes_rewards_dropped
     global kael_boss, kael_defeated, kael_phase
-    global kael_origin_revealed, timeline_restored, level3_complete
+    global kael_origin_revealed, timeline_restored, level3_complete, kael_key_given
+    global waterfall_code_puzzle_visible, waterfall_code_input, waterfall_code_solved
+    global waterfall_maze_visible, temple_code_obtained
     try:
         current_room_coords[0] = 2
         current_room_coords[1] = 0
         current_room_coords[2] = 0
         player_rect.center = (SCREEN_WIDTH // 4, (SCREEN_HEIGHT * 3) // 4)
+        sword_level = 0
+        gorlock_activated = False
+        gorlock_activation_pending = False
+        invincibility_timer = 0.0
 
+        # keep gold and keycards
         keep_gold = inventory.get("Gold", 0)
         keep_keycards = inventory.get("Keycards", 0)
         keep_shards = inventory.get("Time Shards", 0)
+        keep_relics = inventory.get("Relics", 0)
 
         inventory = {
             "Gold": keep_gold,
             "Keycards": keep_keycards,
             "Time Shards": keep_shards,
+            "Relics": keep_relics,
             "Health Potions": 1,
             "Herbs": 0,
             "Keys": 0
@@ -2172,6 +2396,7 @@ def enter_level_3():
         collected_potions.clear()
         collected_keys.clear()
         collected_timeshards.clear()
+        collected_relics.clear()
 
         boss_defeated = False
         boss_drop_collected = False
@@ -2185,11 +2410,15 @@ def enter_level_3():
         temple_puzzle_attempts = 0
         temple_puzzle_solved = False
         temple_gate_unlocked = False
+        waterfall_code_puzzle_visible = False
+        waterfall_code_input = ""
+        waterfall_code_solved = False
+        waterfall_maze_visible = False
+        invincibility_brewed = False
         jungle_trap_timer = 0.0
         jungle_traps_active = False
         jungle_cleared = False
         time_spirits = []
-        cave_entrance_revealed = False
         cave_guardians = []
         cave_relic_available = False
         cave_relic_collected = False
@@ -2204,6 +2433,7 @@ def enter_level_3():
         kael_defeated = False
         kael_phase = 1
         kael_origin_revealed = False
+        kael_key_given = False
         timeline_restored = False
         level3_complete = False
         set_checkpoint((2, 0, 0), pos=player_rect.center, health_value=health)
@@ -2214,11 +2444,13 @@ def enter_level_3():
         set_message("Error entering level 3 (see console).", (255, 0, 0), 5.0)
 
 def start_level_1():
-    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress
+    """Start a fresh run in Level 1."""
+    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, invincibility_timer, invincibility_brewed, sword_level, gorlock_activated
+    global gorlock_activation_pending
     global player_has_weapon, using_laser_weapon, current_ammo, max_ammo_count, using_sword_weapon
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
     global inventory, quests, collected_gold, collected_herbs, collected_potions
-    global collected_keys, collected_timeshards, collected_credits
+    global collected_keys, collected_timeshards, collected_credits, collected_relics
     global safe_input, safe_unlocked, safe_visible, cipher_visible, cipher_input
     global compiler_quest_active, compiler_quest_completed, compiler_input
     global boss_defeated, boss_drop_collected, boss_initialized, boss2_initialized
@@ -2229,11 +2461,16 @@ def start_level_1():
 
     max_health = 100
     health = max_health
+    invincibility_timer = 0.0
+    invincibility_brewed = False
     weapon_level = 1
     armor_level = 0
     player_has_weapon = False
     using_laser_weapon = False
     using_sword_weapon = False
+    sword_level = 0
+    gorlock_activated = False
+    gorlock_activation_pending = False
     player_sword_swinging = False
     player_sword_angle = 0.0
     player_sword_cooldown = 0.0
@@ -2248,6 +2485,7 @@ def start_level_1():
         "Keys": 0,
         "Time Shards": 0,
         "Keycards": 0,
+        "Relics": 0,
         "Ammo Packs": 0
     }
 
@@ -2272,6 +2510,7 @@ def start_level_1():
     collected_keys.clear()
     collected_timeshards.clear()
     collected_credits.clear()
+    collected_relics.clear()
 
     safe_input = ""
     safe_unlocked = False
@@ -2287,6 +2526,7 @@ def start_level_1():
     boss_initialized = False
     boss2_initialized = False
 def update_thrown_axes(dt_sec):
+    """Update positions of thrown axes and check for collisions."""
     global boss_thrown_axes, health
     
     axes_to_remove = []
@@ -2308,8 +2548,7 @@ def update_thrown_axes(dt_sec):
         if player_rect.colliderect(axe_rect):
                                                                        
             damage = boss_axe_damage - (armor_level * 3)
-            health = max(0, health - damage)
-            set_message(f"Thrown axe hit for {damage} damage!", (255, 0, 0), 1.5)
+            apply_player_damage(damage, f"Thrown axe hit for {damage} damage!", (255, 0, 0), 1.5)
             axes_to_remove.append(i)
     
    
@@ -2317,6 +2556,7 @@ def update_thrown_axes(dt_sec):
         boss_thrown_axes.pop(i)
 
 def calculate_axe_rect():
+    """Calculate the current position of the boss's axe."""
     if not boss:
         return pygame.Rect(0, 0, 0, 0)
     
@@ -2336,6 +2576,7 @@ def calculate_axe_rect():
     return pygame.Rect(axe_x - 40, axe_y - 20, 80, 40)
 
 def draw_boss(surface):
+    """Draw the boss and his axe."""
     if not boss or not boss["alive"]:
         return
     
@@ -2372,6 +2613,7 @@ def draw_boss(surface):
     surface.blit(health_text, (health_x + 5, health_y + 3))
 
 def check_boss_hit():
+    """Check if bullets hit the boss."""
     global boss_health, active_bullets, boss_defeated, boss_phase
     
     if not boss or not boss["alive"]:
@@ -2401,6 +2643,7 @@ def check_boss_hit():
             active_bullets.pop(i)
 
 def draw_boss_drops(surface):
+    """Draw the boss drops after defeat."""
     if boss_defeated and not boss_drop_collected:
        
         timeshard_img = load_item_image("timeshard")
@@ -2411,6 +2654,7 @@ def draw_boss_drops(surface):
         surface.blit(key_img, (boss["rect"].centerx + 15, boss["rect"].centery - 25))
 
 def collect_boss_drops():
+    """Collect boss drops when player walks over them."""
     global boss_drop_collected, inventory, quests
     
     if boss_defeated and not boss_drop_collected:
@@ -2441,6 +2685,7 @@ boss2_attack_cooldown = 0.0
 boss2_accuracy = 0.75                                           
 
 def init_boss2():
+    """Initialize the AI boss in the AI Control Room."""
     global boss2, boss2_health, boss2_max_health, boss2_alive, boss2_defeated, boss2_phase, boss2_laser_cooldown, boss2_laser_charge_index, boss2_lasers, boss2_contact_cooldown, boss2_projectiles, boss2_attack_cooldown, boss2_accuracy
                                                                                     
     try:
@@ -2465,6 +2710,7 @@ def init_boss2():
     boss2_accuracy = 0.45                         
 
 def update_boss2(dt):
+    """Boss2 behavior: Phase 1 chases player, Phase 2 (at 150 HP) charges and fires lasers."""
     global boss2_health, boss2_alive, health, boss2_defeated, boss2_phase, boss2_laser_cooldown, boss2_laser_charge_index, boss2_lasers, boss2_contact_cooldown, boss2_projectiles, boss2_attack_cooldown, boss2_accuracy
     if not boss2 or not boss2.get("alive", False):
         return
@@ -2589,10 +2835,9 @@ def update_boss2(dt):
         if proj["lifetime"] > 0:
             proj_rect = pygame.Rect(proj["x"] - 4, proj["y"] - 4, 8, 8)
             if player_rect.colliderect(proj_rect):
-                health = max(0, health - 12)                     
-                global player_electrified_timer
-                player_electrified_timer = 2.0                             
-                set_message("Hit by boss projectile!", (255, 100, 100), 1.0)
+                if apply_player_damage(12, "Hit by boss projectile!", (255, 100, 100), 1.0):
+                    global player_electrified_timer
+                    player_electrified_timer = 2.0
                 projectiles_to_remove.append(i)
         
                                                      
@@ -2769,6 +3014,10 @@ def shoot_bullet():
     return False
 
 def update_bullets(dt):
+    # update_bullets moves bullets and checks if they hit enemies or drones
+    # bullets travel fast and we remove them when they go offscreen
+    # bullets can damage goblins timebandits and even the drone boss
+    """Update bullet positions and check collisions."""
     global active_bullets, kael_defeated
     
     bullets_to_remove = []
@@ -2782,16 +3031,13 @@ def update_bullets(dt):
             bullets_to_remove.append(i)
             continue
 
+        # hostile bullets should damage the player
         if bullet.get("hostile"):
             br = int(bullet.get("radius", 4))
             bullet_rect = pygame.Rect(bullet["x"] - br, bullet["y"] - br, br * 2, br * 2)
             if player_rect.colliderect(bullet_rect):
-                try:
-                    global health
-                    health = max(0, health - int(bullet.get("damage", 0)))
-                except Exception:
-                    pass
-                set_message(f"Hit for {int(bullet.get('damage',0))} damage", (255, 100, 100), 1.2)
+                damage = int(bullet.get("damage", 0))
+                apply_player_damage(damage, f"Hit for {damage} damage", (255, 100, 100), 1.2)
                 bullets_to_remove.append(i)
                 continue
 
@@ -2899,6 +3145,7 @@ def update_bullets(dt):
                 if kael_boss["hp"] <= 0:
                     kael_boss["hp"] = 0
                     kael_defeated = True
+                    drop_kael_relic()
                     def _to_sanctuary():
                         global previous_room_coords
                         current_room_coords[:] = [2, 0, 2]
@@ -2911,19 +3158,17 @@ def update_bullets(dt):
                         "A calm silence follows as the altar fades."
                     ], line_duration=3.0, on_complete=_to_sanctuary)
 
+        # Gorlock in Stage 2 is immune to bullets, only vulnerable to sword
         if room_key == (2, 2, 1) and gorlock_boss and not gorlock_defeated:
             if gorlock_boss["rect"].collidepoint(bullet["x"], bullet["y"]):
+                # In stage 1, take bullet damage; in stage 2, immune to bullets
                 if gorlock_stage == 1:
                     gorlock_boss["hp"] -= bullet.get("damage", 0)
                     bullets_to_remove.append(i)
                 elif gorlock_stage == 2:
+                    # Stage 2: immune to bullets
                     set_message("Gorlock is immune to bullets in Stage 2! Use your sword!", (255, 150, 100), 1.5)
                     bullets_to_remove.append(i)
-                    start_cutscene([
-                        "Kael falters, the relics pulsing with restored light.",
-                        "The final strike shatters the temporal distortion.",
-                        "A calm silence follows as the altar fades."
-                    ], line_duration=3.0, on_complete=_to_sanctuary)
 
         
         for d in drones:
@@ -2979,7 +3224,10 @@ def _get_player_sword_rect():
     return pygame.Rect(int(cx - sword_w / 2), int(cy - sword_h / 2), sword_w, sword_h), angle_deg
 
 def update_player_sword(dt):
+    """Update sword swing state and apply hits."""
     global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit, kael_defeated
+    global boss_health, boss_defeated, boss_phase, boss_max_health
+    global boss2_health, boss2_defeated, boss2_alive
     if player_sword_cooldown > 0:
         player_sword_cooldown = max(0.0, player_sword_cooldown - dt / 1000.0)
     if not player_sword_swinging:
@@ -2989,7 +3237,7 @@ def update_player_sword(dt):
     sword_rect, _ = _get_player_sword_rect()
 
     if not player_sword_hit:
-        sword_damage = int(18 * player_stat_multiplier)
+        sword_damage = get_sword_damage()
         room_key = tuple(current_room_coords)
 
         state = goblin_rooms.get(room_key)
@@ -3027,9 +3275,41 @@ def update_player_sword(dt):
                     player_sword_hit = True
                     break
 
+        if not player_sword_hit and room_key == (2, 2, 0):
+            for spirit in time_spirits:
+                if not spirit.get("alive", True):
+                    continue
+                spirit_rect = pygame.Rect(spirit["x"] - 14, spirit["y"] - 14, 28, 28)
+                if sword_rect.colliderect(spirit_rect):
+                    spirit["hp"] -= sword_damage
+                    if spirit["hp"] <= 0:
+                        spirit["alive"] = False
+                        inventory["Gold"] += 5
+                        set_message("+5 Gold (Spirit)", (180, 220, 255), 1.2)
+                    player_sword_hit = True
+                    break
+
+        if not player_sword_hit and room_key == (2, 2, 2):
+            for guardian in cave_guardians:
+                if not guardian.get("alive", True):
+                    continue
+                guardian_rect = pygame.Rect(guardian["x"] - 18, guardian["y"] - 18, 36, 36)
+                if sword_rect.colliderect(guardian_rect):
+                    guardian["hp"] -= sword_damage
+                    if guardian["hp"] <= 0:
+                        guardian["alive"] = False
+                        set_message("Guardian shattered!", (200, 180, 180), 1.2)
+                    player_sword_hit = True
+                    break
+
         if not player_sword_hit and room_key == (2, 0, 1) and echoes_miniboss and not echoes_boss_defeated:
             if sword_rect.colliderect(echoes_miniboss["rect"]):
                 echoes_miniboss["hp"] -= sword_damage
+                player_sword_hit = True
+
+        if not player_sword_hit and room_key == (2, 2, 1) and gorlock_boss and not gorlock_defeated:
+            if sword_rect.colliderect(gorlock_boss["rect"]):
+                gorlock_boss["hp"] -= sword_damage
                 player_sword_hit = True
 
         if not player_sword_hit and room_key == (2, 1, 2) and kael_boss and not kael_defeated:
@@ -3038,6 +3318,7 @@ def update_player_sword(dt):
                 if kael_boss["hp"] <= 0:
                     kael_boss["hp"] = 0
                     kael_defeated = True
+                    drop_kael_relic()
                     def _to_sanctuary():
                         global previous_room_coords
                         current_room_coords[:] = [2, 0, 2]
@@ -3051,6 +3332,34 @@ def update_player_sword(dt):
                     ], line_duration=3.0, on_complete=_to_sanctuary)
                 player_sword_hit = True
 
+        if not player_sword_hit and room_key == (0, 2, 0) and boss and boss.get("alive", False):
+            if sword_rect.colliderect(boss["rect"]):
+                boss_health -= sword_damage
+                if boss_phase == 1 and boss_health <= boss_max_health // 2:
+                    boss_phase = 2
+                    boss_health = boss_max_health // 2
+                    set_message("The Goblin King enters Phase 2! He's faster and throws axes!", (255, 100, 100), 3.0)
+                if boss_health <= 0:
+                    boss["alive"] = False
+                    boss_defeated = True
+                    set_message("Goblin King defeated! Collect the drops!", (0, 255, 0), 3.0)
+                player_sword_hit = True
+
+        if not player_sword_hit and room_key == (1, 2, 2) and boss2 and boss2.get("alive", False):
+            if sword_rect.colliderect(boss2["rect"]):
+                boss2_health -= sword_damage
+                if boss2_health <= 0:
+                    boss2["alive"] = False
+                    boss2_alive = False
+                    boss2_defeated = True
+                    room_key = (1, 2, 2)
+                    room_info = room_data.get(room_key, {})
+                    if room_info is not None:
+                        room_info.setdefault("items", []).append({"type": "timeshard", "x": boss2["rect"].centerx - 25, "y": boss2["rect"].centery - 25, "id": "timeshard_ai_1"})
+                        room_info.setdefault("items", []).append({"type": "keycard", "x": boss2["rect"].centerx + 15, "y": boss2["rect"].centery - 25, "id": "keycard_ai_1"})
+                    set_message("AI Core defeated! Drops spawned in the room.", (0, 255, 0), 3.0)
+                player_sword_hit = True
+
         if not player_sword_hit:
             for d in drones:
                 if tuple(d.get("room_key")) != room_key:
@@ -3059,8 +3368,21 @@ def update_player_sword(dt):
                 if sword_rect.colliderect(dr):
                     if d.get("hp") is not None:
                         d["hp"] -= sword_damage
-                        if d["hp"] <= 0:
+                        if d["hp"] <= 0 and not d.get("loot_given"):
+                            d["loot_given"] = True
                             d["alive"] = False
+                            room_info = room_data.get(room_key, {})
+                            if room_info is not None:
+                                cx = int(d.get("x", 0) + d.get("w", 48) / 2)
+                                cy = int(d.get("y", 0) + d.get("h", 48) / 2)
+                                room_items = room_info.setdefault("items", [])
+                                room_items.append({
+                                    "type": "keycard",
+                                    "x": cx - 16,
+                                    "y": cy - 16,
+                                    "id": f"keycard_drone_{room_key[1]}_{room_key[2]}"
+                                })
+                            set_message("Drone Boss defeated! A Keycard has spawned.", (0, 255, 0), 3.0)
                     player_sword_hit = True
                     break
 
@@ -3079,6 +3401,7 @@ def draw_player_sword(surface):
     surface.blit(rotated, (sword_rect.x, sword_rect.y))
 
 def try_sword_swing():
+    """Start a sword swing if available."""
     global player_sword_swinging, player_sword_angle, player_sword_hit
     if not using_sword_weapon:
         return False
@@ -3113,6 +3436,7 @@ def draw_bullets(surface):
                 surface.blit(trail_surf, (int(trail_x)-radius, int(trail_y)-radius))
 
 def draw_weapon_hud(surface):
+    """Draw weapon ammo and reload status."""
     if player_has_weapon:
         ammo_text = font.render(f"Ammo: {current_ammo}/{max_ammo_count}", True, (255, 255, 255))
         surface.blit(ammo_text, (10, 10))
@@ -3142,6 +3466,7 @@ def draw_weapon_hud(surface):
             surface.blit(armor_text, (10, SCREEN_HEIGHT - 60))
 
 def draw_cyber_shop(surface):
+    """Draw the cyberpunk shop interface."""
     if not cyber_shop_visible:
         return
     
@@ -3316,6 +3641,7 @@ def handle_cyber_purchase(item_id):
     return True
 
 def set_checkpoint(room_key, pos=None, health_value=None):
+    """Store a lightweight checkpoint for Level 3 scenes."""
     global checkpoint_data
     if pos is None:
         pos = (player_rect.centerx, player_rect.centery)
@@ -3328,6 +3654,7 @@ def set_checkpoint(room_key, pos=None, health_value=None):
     }
 
 def respawn_to_checkpoint():
+    """Respawn the player at the last saved checkpoint."""
     global health, player_rect, current_room_coords, reloading_active, reload_timer
     if not checkpoint_data:
         return False
@@ -3342,6 +3669,7 @@ def respawn_to_checkpoint():
     return True
 
 def respawn_player():
+    """Handle player respawn with penalties."""
     global health, max_health, weapon_level, armor_level, player_rect, current_room_coords, current_ammo, reloading_active, reload_timer
     
    
@@ -3359,11 +3687,22 @@ def respawn_player():
     current_ammo = 0 if not player_has_weapon else max_ammo_count
     reloading_active = False
     reload_timer = 0.0
+    # Clear any freeze/lock state caused by bosses (e.g., Echoes miniboss)
+    try:
+        if 'echoes_player_frozen' in globals():
+            globals()['echoes_player_frozen'] = False
+        if 'echoes_player_freeze_timer' in globals():
+            globals()['echoes_player_freeze_timer'] = 0.0
+        if 'echoes_player_frozen_pos' in globals():
+            globals()['echoes_player_frozen_pos'] = (0, 0)
+    except Exception:
+        pass
     
     set_message("You died! Respawned in village. Lost 1 weapon and armor level.", (255, 100, 100), 4.0)
 
                  
 def draw_object(x, y, obj_type, surface, level, width=None, height=None):
+    """Draw objects using images only."""
                             
     if obj_type == "invisible":
         rect = pygame.Rect(x, y, width, height)
@@ -3417,26 +3756,54 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         rect = pygame.Rect(x, y, width, height)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
+    if obj_type == "waterfall_code":
+        rect = pygame.Rect(x, y, width, height)
+        img = load_waterfall_code_image()
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (40, 60, 100), rect)
+            pygame.draw.rect(surface, (100, 150, 255), rect, 3)
+            label = small_font.render("CODE LOCK", True, (100, 200, 255))
+            surface.blit(label, (rect.centerx - label.get_width() // 2, rect.centery - 10))
+        interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
+        return rect
     if obj_type == "temple_shop":
         rect = pygame.Rect(x, y, width, height)
-        img = load_image("objects/hutlevel3-removebg-preview.png", width, height)
-        surface.blit(img, (x, y))
+        img = load_image("objects/newcrafting_table.png", width, height)
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (60, 40, 20), rect)
+            pygame.draw.rect(surface, (200, 170, 90), rect, 3)
+            tag = small_font.render("CRAFT", True, (255, 235, 180))
+            surface.blit(tag, (rect.centerx - tag.get_width() // 2, rect.centery - tag.get_height() // 2))
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "crafting_table":
         rect = pygame.Rect(x, y, width, height)
-        if DEBUG_MODE:
-            debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-            debug_surface.fill((40, 60, 40, 100))
-            surface.blit(debug_surface, (x, y))
-            pygame.draw.rect(surface, (120, 200, 140), rect, 2)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "altar":
         rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, (40, 40, 60), rect)
-        pygame.draw.rect(surface, (120, 120, 200), rect, 3)
-        pygame.draw.circle(surface, (140, 200, 255), rect.center, max(10, rect.width // 4), 2)
+        room_key = tuple(current_room_coords)
+        if room_key == (2, 1, 2) and kael_defeated:
+            return rect
+        if not (room_key == (2, 1, 2) and kael_boss and not kael_defeated):
+            pygame.draw.rect(surface, (40, 40, 60), rect)
+            pygame.draw.rect(surface, (120, 120, 200), rect, 3)
+            pygame.draw.circle(surface, (140, 200, 255), rect.center, max(10, rect.width // 4), 2)
+        return rect
+    if obj_type == "gorlock_altar":
+        rect = pygame.Rect(x, y, width, height)
+        img = load_gorlock_altar_image()
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (50, 20, 20), rect)
+            pygame.draw.rect(surface, (200, 80, 80), rect, 3)
+            pygame.draw.circle(surface, (255, 120, 120), rect.center, max(12, rect.width // 4), 2)
+        interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     elif obj_type == "shop":
         img = load_object_image("shop", width, height)
@@ -3475,6 +3842,7 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
 
 
 def handle_damage_zones(dt):
+    """Check if player is in damage zones and apply damage."""
     global health, hazard_timer, hud_message, hud_message_timer, hud_message_color
     
     hazard_timer += dt / 1000.0  
@@ -3488,11 +3856,10 @@ def handle_damage_zones(dt):
     
     if player_in_damage_zone:
 
-        if hazard_timer >= 1.0:
+        damage_interval = 0.6 if tuple(current_room_coords) == (2, 1, 0) else 1.0
+        if hazard_timer >= damage_interval:
             hazard_timer = 0.0
-            health -= 5  
-            
-            set_message("-5 Health!", (255, 0, 0), 1.0)
+            apply_player_damage(25, "-25 Health!", (255, 0, 0), 1.0)
             
             if health <= 0:
                 health = 0
@@ -3522,6 +3889,7 @@ def handle_damage_zones(dt):
         hazard_timer = 0.0
 
 def _player_frame_for_state(state, direction):
+    """Pick the correct frame list for the given state/direction."""
     _ensure_player_frames()
     key = f"{state}_{direction}"
     frames = player_frames.get(key)
@@ -3530,6 +3898,7 @@ def _player_frame_for_state(state, direction):
     return player_frames.get(f"idle_{direction}", [])
 
 def draw_player(surface, player_rect, dt, moving):
+    """Draw player using the new run/idle sprite sheets."""
     global player_state, player_frame_index, player_frame_timer
     
     direction = "left" if player_facing == "left" else "right"
@@ -3558,28 +3927,16 @@ def draw_player(surface, player_rect, dt, moving):
         frame_rect = frame.get_rect(center=player_rect.center)
         surface.blit(frame, frame_rect)
     
+    # Draw freeze effect if player is frozen
     if echoes_player_frozen:
         pygame.draw.rect(surface, (100, 200, 255), player_rect, 3)
+        # Draw "FROZEN" text
         frozen_text = font.render("FROZEN", True, (100, 200, 255))
         text_rect = frozen_text.get_rect(center=(player_rect.centerx, player_rect.top - 30))
         surface.blit(frozen_text, text_rect)
 
-def draw_player_gun(surface, player_rect):
-    if not player_has_weapon or using_sword_weapon or using_laser_weapon:
-        return
-    dx = mouse_x - player_rect.centerx
-    dy = mouse_y - player_rect.centery
-    angle_deg = math.degrees(math.atan2(dy, dx)) if (dx or dy) else 0.0
-    gun = _get_ak24_sprite("right")
-    rotated = pygame.transform.rotate(gun, -angle_deg)
-    arm_x = player_rect.centerx + GUN_OFFSET_X
-    arm_y = player_rect.centery + GUN_OFFSET_Y
-    grip_offset = pygame.math.Vector2(GUN_GRIP_X - gun.get_width() / 2, GUN_GRIP_Y - gun.get_height() / 2)
-    rotated_offset = grip_offset.rotate(-angle_deg)
-    gun_rect = rotated.get_rect(center=(arm_x - rotated_offset.x, arm_y - rotated_offset.y))
-    surface.blit(rotated, gun_rect)
-
 def draw_player_pointer(surface, player_rect):
+    """Draw a small pointer anchored to the player's left side."""
     center_y = player_rect.centery
     tip_x = player_rect.left + AIM_POINTER_OFFSET_X
     points = [
@@ -3590,6 +3947,7 @@ def draw_player_pointer(surface, player_rect):
     pygame.draw.polygon(surface, AIM_POINTER_COLOR, points)
 
 def draw_npc(surface, x, y, npc_id, rescued=False):
+    """Draw NPCs using images."""
     img = load_npc_image(npc_id)
     surface.blit(img, (x, y))
     size = get_npc_size(npc_id)
@@ -3602,6 +3960,7 @@ def draw_npc(surface, x, y, npc_id, rescued=False):
     return rect
 
 def draw_goblins(surface, room_key):
+    """Draw goblin enemies for the current room."""
     state = goblin_rooms.get(room_key)
     if not state:
         return
@@ -3615,6 +3974,7 @@ def draw_goblins(surface, room_key):
                                                          
 
 def draw_timebandits(surface, room_key):
+    """Draw time-bandit enemies for the current room."""
     state = timebandit_rooms.get(room_key)
     if not state:
         return
@@ -3658,6 +4018,7 @@ def draw_timebandits(surface, room_key):
             pygame.draw.rect(surface, (200, 50, 200) if tb.get("boss") else (180, 60, 180), (int(tb["x"]), int(tb["y"]), w, h))
 
 def draw_item(surface, x, y, item_type, item_id):
+    """Draw items using images or procedural graphics."""
     
     level, row, col = current_room_coords
     collected_set = get_collected_set(item_type)
@@ -3677,7 +4038,7 @@ def draw_item(surface, x, y, item_type, item_id):
         img = load_item_image(item_type)
         surface.blit(img, (x, y))
         
-        if item_type in ["key", "gold", "herb"]:
+        if item_type in ["key", "gold", "herb", "relic"]:
             rect = pygame.Rect(x, y, 45, 45)  
         elif item_type == "timeshard":
             rect = pygame.Rect(x, y, 50, 50)  
@@ -3710,11 +4071,17 @@ def get_collected_set(item_type):
         return collected_keys
     elif item_type == "timeshard":
         return collected_timeshards
+    elif item_type == "relic":
+        return collected_relics
     elif item_type == "credit":
         return collected_credits
     return set()
 
 def draw_room(surface, level, row, col):
+    # draw_room paints the current room and places objects and npcs
+    # it resets lists like colliders and items then rebuilds them from room_data
+    # this is called every frame so keep it relatively fast
+    """Draw the current room using images only."""
     global colliders, gold_items, herbs, potions, npcs, interactive_objects, hazard_zones
 
                                                                                       
@@ -3785,11 +4152,16 @@ def draw_room(surface, level, row, col):
         draw_item(surface, item["x"], item["y"], item["type"], item.get("id", ""))
 
     draw_level3_room_extras(surface, room_key)
+    draw_waterfall_challenge(surface)
+    draw_temporal_altar_hint(surface)
+    draw_timeless_sanctuary_final(surface)
 
 def get_time_slow_factor():
+    """Return the global time slow multiplier."""
     return 1.0
 
 def init_time_spirits():
+    """Initialize jungle time spirits with patrol paths."""
     global time_spirits
     if time_spirits:
         return
@@ -3811,10 +4183,12 @@ def init_time_spirits():
         })
 
 def update_time_spirits(dt):
+    """Update jungle time spirit patrols."""
     global health, player_electrified_timer
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 0):
         return
+    return
     if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible or maze_visible or race_active or crafting_visible or temple_puzzle_visible or temple_shop_visible:
         return
     init_time_spirits()
@@ -3838,12 +4212,12 @@ def update_time_spirits(dt):
         spirit_rect = pygame.Rect(spirit["x"] - 14, spirit["y"] - 14, 28, 28)
         if spirit_rect.colliderect(player_rect) and spirit["contact_cd"] <= 0.0:
             damage = 6
-            health = max(0, health - damage)
-            player_electrified_timer = 2.0
+            if apply_player_damage(damage, f"-{damage} HP (Time Spirit)", (180, 120, 255), 1.2):
+                player_electrified_timer = 2.0
             spirit["contact_cd"] = 0.9
-            set_message(f"-{damage} HP (Time Spirit)", (180, 120, 255), 1.2)
 
 def draw_time_spirits(surface):
+    """Draw jungle time spirits."""
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 0):
         return
@@ -3856,16 +4230,18 @@ def draw_time_spirits(surface):
         pygame.draw.circle(surface, (200, 220, 255), (x, y), 22, 2)
 
 def init_cave_guardians():
+    """Spawn cave guardians in the Waterfall Cave."""
     global cave_guardians
     if cave_guardians or cave_relic_collected:
         return
     cave_guardians = [
-        {"x": 220.0, "y": 260.0, "hp": 45, "alive": True, "contact_cd": 0.0},
-        {"x": 520.0, "y": 300.0, "hp": 45, "alive": True, "contact_cd": 0.0},
-        {"x": 420.0, "y": 500.0, "hp": 55, "alive": True, "contact_cd": 0.0},
+        {"x": 220.0, "y": 260.0, "hp": 50, "alive": True, "contact_cd": 0.0},
+        {"x": 520.0, "y": 300.0, "hp": 50, "alive": True, "contact_cd": 0.0},
+        {"x": 420.0, "y": 500.0, "hp": 50, "alive": True, "contact_cd": 0.0},
     ]
 
 def update_cave_guardians(dt):
+    """Update cave guardian movement."""
     global health
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 2):
@@ -3890,11 +4266,11 @@ def update_cave_guardians(dt):
         guardian_rect = pygame.Rect(guardian["x"] - 18, guardian["y"] - 18, 36, 36)
         if guardian_rect.colliderect(player_rect) and guardian["contact_cd"] <= 0.0:
             damage = 8
-            health = max(0, health - damage)
+            apply_player_damage(damage, f"-{damage} HP (Cave Guardian)", (255, 120, 120), 1.2)
             guardian["contact_cd"] = 1.0
-            set_message(f"-{damage} HP (Cave Guardian)", (255, 120, 120), 1.2)
 
 def draw_cave_guardians(surface):
+    """Draw cave guardians."""
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 2):
         return
@@ -3902,11 +4278,16 @@ def draw_cave_guardians(surface):
         if not guardian.get("alive", True):
             continue
         x, y = int(guardian["x"]), int(guardian["y"])
-        pygame.draw.circle(surface, (200, 80, 80), (x, y), 20)
-        pygame.draw.circle(surface, (120, 40, 40), (x, y), 12)
-        pygame.draw.circle(surface, (240, 200, 200), (x, y), 22, 2)
+        img = load_cave_guardian_image()
+        if img:
+            surface.blit(img, (x - 18, y - 18))
+        else:
+            pygame.draw.circle(surface, (200, 80, 80), (x, y), 20)
+            pygame.draw.circle(surface, (120, 40, 40), (x, y), 12)
+            pygame.draw.circle(surface, (240, 200, 200), (x, y), 22, 2)
 
 def update_jungle_scene(dt):
+    """Update jungle traps and exit trigger."""
     global jungle_trap_timer, jungle_traps_active, jungle_cleared
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 0):
@@ -3923,21 +4304,33 @@ def update_jungle_scene(dt):
         jungle_cleared = True
         set_message("You made it through the jungle path!", (180, 255, 180), 2.5)
 
+def update_jungle_spikes(dt):
+    """Apply spike damage in the Jungle Path."""
+    global jungle_spike_hit_cd
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 2, 0):
+        return
+    dt_sec = dt / 1000.0
+    jungle_spike_hit_cd = max(0.0, jungle_spike_hit_cd - dt_sec)
+    if jungle_spike_hit_cd > 0.0:
+        return
+    for rect in jungle_spike_rects:
+        if player_rect.colliderect(rect):
+            if apply_player_damage(50, "-50 HP (Spikes)", (255, 80, 80), 1.2):
+                jungle_spike_hit_cd = 0.6
+            break
+
 def update_cave_scene():
-    global cave_entrance_revealed, cave_relic_available
+    """Reveal the cave entrance and relic availability."""
+    global cave_relic_available
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 2):
         return
-    if not cave_entrance_revealed and player_rect.colliderect(cave_reveal_rect):
-        cave_entrance_revealed = True
-        set_message("Hidden cave entrance revealed!", (180, 220, 255), 2.0)
-    if not cave_relic_available and not cave_relic_collected:
-        living = any(g.get("alive", True) for g in cave_guardians)
-        if not living and cave_guardians:
-            cave_relic_available = True
-            set_message("The relic is now safe to claim.", (200, 220, 255), 2.0)
+    if cave_relic_available:
+        cave_relic_available = False
 
 def update_lava_scene(dt):
+    """Update lava platforms and contact damage."""
     global lava_platform_timer
     room_key = tuple(current_room_coords)
     if room_key != (2, 1, 0):
@@ -3946,6 +4339,7 @@ def update_lava_scene(dt):
     lava_platform_timer += dt_sec * get_time_slow_factor()
 
 def spawn_echoes_miniboss():
+    """Spawn the Hall of Echoes miniboss."""
     global echoes_miniboss, echoes_arena_locked, echoes_miniboss_projectiles, echoes_player_frozen, echoes_player_freeze_timer, echoes_laser_timer, echoes_laser_active
     echoes_miniboss = {
         "rect": pygame.Rect(340, 260, 120, 140),
@@ -3963,6 +4357,7 @@ def spawn_echoes_miniboss():
     set_message("The Hall of Echoes seals itself...", (200, 160, 255), 2.5)
 
 def update_echoes_miniboss(dt):
+    """Update the Hall of Echoes miniboss."""
     global echoes_miniboss, echoes_boss_defeated, echoes_arena_locked
     global player_electrified_timer, health
     global echoes_miniboss_projectiles, echoes_player_frozen, echoes_player_freeze_timer, echoes_laser_timer, echoes_laser_active, echoes_player_frozen_pos
@@ -3976,6 +4371,7 @@ def update_echoes_miniboss(dt):
     dt_sec = dt / 1000.0
     speed_factor = get_time_slow_factor()
     
+    # Move boss towards player
     dx = player_rect.centerx - echoes_miniboss["rect"].centerx
     dy = player_rect.centery - echoes_miniboss["rect"].centery
     dist = math.hypot(dx, dy)
@@ -3984,18 +4380,23 @@ def update_echoes_miniboss(dt):
         echoes_miniboss["rect"].x += int((dx / dist) * step)
         echoes_miniboss["rect"].y += int((dy / dist) * step)
 
+    # Attack pattern: shoot multiple timedmg projectiles (locking orbs)
     echoes_miniboss["attack_cd"] -= dt_sec * speed_factor
     if echoes_miniboss["attack_cd"] <= 0:
         echoes_miniboss["attack_cd"] = 2.5
+        # Spawn a spread of locking orbs aimed roughly at the player
         if dist > 0:
             proj_speed = 250
+            # configuration: number of orbs and total spread in degrees
             num_orbs = 3
             spread_deg = 20
             max_active_orbs = 12
+            # only spawn if we don't already have too many active orbs
             if len(echoes_miniboss_projectiles) < max_active_orbs:
                 base_angle = math.atan2(dy, dx)
                 spread_rad = math.radians(spread_deg)
                 for i in range(num_orbs):
+                    # distribute angles around the base_angle
                     if num_orbs > 1:
                         t = i / (num_orbs - 1)
                         angle = base_angle - spread_rad / 2 + t * spread_rad
@@ -4013,23 +4414,27 @@ def update_echoes_miniboss(dt):
                     })
         set_message("Echo Warden fires locking orbs!", (200, 140, 255), 1.6)
 
+    # Update projectiles
     projectiles_to_remove = []
     for i, proj in enumerate(echoes_miniboss_projectiles):
         proj["x"] += proj["vx"] * dt_sec * speed_factor
         proj["y"] += proj["vy"] * dt_sec * speed_factor
         proj["lifetime"] -= dt_sec * speed_factor
         
+        # Check collision with player
         if proj["lifetime"] > 0:
             proj_rect = pygame.Rect(proj["x"] - 8, proj["y"] - 8, 16, 16)
             if player_rect.colliderect(proj_rect):
+                # Player hit by timedmg - freeze and set up laser
                 echoes_player_frozen = True
                 echoes_player_freeze_timer = 2.0
                 echoes_player_frozen_pos = (player_rect.centerx, player_rect.centery)
-                echoes_laser_timer = 1.0
+                echoes_laser_timer = 1.0  # First laser fires after 1 second
                 echoes_laser_active = True
                 set_message("Frozen! Laser incoming!", (255, 100, 100), 1.0)
                 projectiles_to_remove.append(i)
         
+        # Remove expired projectiles
         if proj["lifetime"] <= 0 or proj["x"] < -50 or proj["x"] > SCREEN_WIDTH + 50 or proj["y"] < -50 or proj["y"] > SCREEN_HEIGHT + 50:
             if i not in projectiles_to_remove:
                 projectiles_to_remove.append(i)
@@ -4041,8 +4446,18 @@ def update_echoes_miniboss(dt):
         echoes_boss_defeated = True
         echoes_arena_locked = False
         set_message("Echo Warden defeated!", (255, 220, 150), 2.5)
+        room_info = room_data.get((2, 0, 1), {})
+        items = room_info.setdefault("items", [])
+        if not any(it.get("id") == "relic_echoes" for it in items):
+            items.append({
+                "type": "relic",
+                "x": echoes_miniboss["rect"].centerx - 20,
+                "y": echoes_miniboss["rect"].centery - 20,
+                "id": "relic_echoes",
+            })
 
 def update_echoes_freeze_and_laser(dt):
+    """Update the freeze effect and laser attack for Hall of Echoes boss."""
     global echoes_player_frozen, echoes_player_freeze_timer, echoes_laser_timer, echoes_laser_active
     global player_rect, health
     
@@ -4056,19 +4471,23 @@ def update_echoes_freeze_and_laser(dt):
     dt_sec = dt / 1000.0
     speed_factor = get_time_slow_factor()
     
+    # Update freeze timer (2 seconds total freeze)
     echoes_player_freeze_timer -= dt_sec * speed_factor
     
+    # Force player to stay at frozen position
     player_rect.centerx = echoes_player_frozen_pos[0]
     player_rect.centery = echoes_player_frozen_pos[1]
     
+    # Shoot laser every 1 second during the freeze
     if echoes_laser_active:
         echoes_laser_timer -= dt_sec * speed_factor
         
+        # Laser fires and deals 12 damage
         if echoes_laser_timer <= 0:
-            health = max(0, health - 25)
-            set_message("LASER HIT! 25 damage!", (255, 0, 0), 1.0)
-            echoes_laser_timer = 1.0
+            apply_player_damage(12, "LASER HIT! 12 damage!", (255, 0, 0), 1.0)
+            echoes_laser_timer = 1.0  # Reset timer to fire again in 1 second
     
+    # End freeze effect when timer expires (2 seconds)
     if echoes_player_freeze_timer <= 0:
         echoes_player_frozen = False
         echoes_laser_active = False
@@ -4077,6 +4496,7 @@ def update_echoes_freeze_and_laser(dt):
         echoes_laser_timer = 0.0
 
 def draw_echoes_miniboss(surface):
+    """Draw the Hall of Echoes miniboss."""
     if not echoes_miniboss or echoes_boss_defeated:
         return
     room_key = tuple(current_room_coords)
@@ -4092,6 +4512,7 @@ def draw_echoes_miniboss(surface):
     hp_ratio = max(0, echoes_miniboss["hp"]) / max(1, echoes_miniboss["max_hp"])
     pygame.draw.rect(surface, (255, 80, 120), (bar_x, bar_y, int(bar_w * hp_ratio), 6))
     
+    # Draw timedmg projectiles
     for proj in echoes_miniboss_projectiles:
         if proj["lifetime"] > 0:
             proj_img = load_image("projectiles/timedmg.png", 16, 16)
@@ -4100,151 +4521,287 @@ def draw_echoes_miniboss(surface):
             else:
                 pygame.draw.circle(surface, (0, 255, 255), (int(proj["x"]), int(proj["y"])), 8)
     
+    # Draw laser effect if active
     if echoes_laser_active and echoes_player_frozen:
         pygame.draw.line(surface, (255, 0, 0), echoes_miniboss["rect"].center, echoes_player_frozen_pos, 4)
         pygame.draw.circle(surface, (255, 100, 100), echoes_player_frozen_pos, 20, 2)
-    
+
+def init_waterfall_challenge():
+    """Initialize the Waterfall Cave timing-based platform challenge."""
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
+
+def update_waterfall_challenge(dt):
+    """Update Waterfall Cave platform challenge."""
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
+
+def draw_waterfall_challenge(surface):
+    """Draw Waterfall Cave platform challenge."""
+    # DISABLED: Falling platforms removed. Code puzzle now main challenge.
+    pass
+
 def spawn_gorlock_boss():
-    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_state, gorlock_mace_timer, gorlock_taunt_active, gorlock_taunt_timer, gorlock_taunt_cd, gorlock_berserk, gorlock_mace_projectiles
+    """Spawn Gorlock the Time Eater in the Forgotten City."""
+    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_swinging, gorlock_mace_thrown
+    global gorlock_mace_angle, gorlock_attack_cooldown, gorlock_last_direction
+    
     gorlock_stage = 1
+    boss_rect = pygame.Rect(0, 0, 200, 260)
+    boss_rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120)
     gorlock_boss = {
-        "rect": pygame.Rect(300, 160, 200, 260),
+        "rect": boss_rect,
         "hp": 6000,
         "max_hp": 6000,
-        "speed": int(player_move_speed * 1.7),
-        "mace_cd": 0.0,
-        "_taunt_timer": 30.0,
+        "speed": 220,  # Similar to boss speed
+        "last_direction": "right",
     }
     gorlock_defeated = False
-    gorlock_mace_state = None
-    gorlock_mace_timer = 0.0
-    gorlock_taunt_active = False
-    gorlock_taunt_timer = 0.0
-    gorlock_mace_projectiles = []
-    gorlock_berserk = False
+    gorlock_stage = 1
+    gorlock_mace_swinging = False
+    gorlock_mace_angle = 0
+    gorlock_mace_thrown = []
+    gorlock_attack_cooldown = 0.0
+    gorlock_last_direction = "right"
     set_message("Gorlock, the Time Eater has appeared!", (200, 100, 100), 3.0)
 
 def update_gorlock_boss(dt):
-    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_state, gorlock_mace_timer, gorlock_taunt_active, gorlock_taunt_timer, gorlock_mace_projectiles, gorlock_berserk, health, player_stat_multiplier
+    """Update Gorlock behaviour and attacks - works like regular boss."""
+    global gorlock_boss, gorlock_defeated, gorlock_stage, gorlock_mace_swinging, gorlock_mace_angle
+    global gorlock_mace_thrown, gorlock_attack_cooldown, gorlock_last_direction, health, player_stat_multiplier
+    global gorlock_taunt_active, gorlock_taunt_timer, gorlock_taunt_cooldown_timer
+    global player_base_move_speed, player_base_stat_multiplier, player_move_speed
+    
     if not gorlock_boss or gorlock_defeated:
         return
+    
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 1):
         return
-    if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible or maze_visible or race_active or crafting_visible or temple_puzzle_visible or temple_shop_visible:
+    
+    if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible:
         return
     
     dt_sec = dt / 1000.0
     speed_factor = get_time_slow_factor()
-
+    
+    # MOVEMENT - Approach player like regular boss
     dx = player_rect.centerx - gorlock_boss["rect"].centerx
     dy = player_rect.centery - gorlock_boss["rect"].centery
     dist = math.hypot(dx, dy)
-    if dist > 10:
-        boss_speed = gorlock_boss.get("speed", int(player_move_speed * 1.7))
-        step = boss_speed * speed_factor * dt_sec
-        gorlock_boss["rect"].x += int((dx / dist) * step)
-        gorlock_boss["rect"].y += int((dy / dist) * step)
-
-    if gorlock_stage == 1 and gorlock_boss["hp"] <= 0:
-        gorlock_stage = 2
-        gorlock_boss["hp"] = 6000
-        gorlock_boss["max_hp"] = 6000
-        gorlock_boss["mace_cd"] = 0.0
-        set_message("Gorlock enrages and enters Stage 2!", (255, 120, 100), 3.0)
-        return
-
-    if gorlock_stage == 2 and not gorlock_berserk and gorlock_boss["hp"] <= 1000:
-        gorlock_berserk = True
-        gorlock_boss["speed"] = int(gorlock_boss.get("speed", int(player_move_speed * 1.7)) * 1.25)
-        gorlock_boss["mace_cd"] = max(0.5, gorlock_boss.get("mace_cd", 5.0) * 0.75)
-        set_message("Gorlock goes berserk!", (255, 50, 50), 2.5)
-
-    if "mace_cd" not in gorlock_boss:
-        gorlock_boss["mace_cd"] = 0.0
-    gorlock_boss["mace_cd"] -= dt_sec * speed_factor
     
-    if gorlock_boss["mace_cd"] <= 0:
-        gorlock_boss["mace_cd"] = 6.0 if gorlock_stage == 1 else 5.0
-        gorlock_mace_state = "swing"
-        gorlock_mace_timer = 0.8
-        set_message("Gorlock winds up his massive mace!", (255, 140, 120), 1.2)
-
-    if gorlock_mace_state == "swing":
-        gorlock_mace_timer -= dt_sec * speed_factor
-        swing_rect = pygame.Rect(gorlock_boss["rect"].centerx - 150, gorlock_boss["rect"].centery - 120, 300, 240)
-        if player_rect.colliderect(swing_rect):
-            health = max(0, health - 45)
-            set_message("Hit by Gorlock's mace! -45 HP", (255, 100, 80), 1.2)
-        if gorlock_mace_timer <= 0:
-            gorlock_mace_state = None
-
-    if gorlock_stage == 2 and random.random() < 0.08:
-        if dist > 0:
-            angle = math.atan2(dy, dx)
-            gorlock_mace_projectiles.append({
-                "x": float(gorlock_boss["rect"].centerx),
-                "y": float(gorlock_boss["rect"].centery),
-                "vx": math.cos(angle) * 320,
-                "vy": math.sin(angle) * 320,
-                "lifetime": 6.0,
-                "damage": 30
-            })
-            set_message("Gorlock hurls his mace at you!", (255, 120, 80), 1.0)
-
-    proj_remove = []
-    for i, proj in enumerate(gorlock_mace_projectiles):
-        proj["x"] += proj["vx"] * dt_sec * speed_factor
-        proj["y"] += proj["vy"] * dt_sec * speed_factor
-        proj["lifetime"] -= dt_sec * speed_factor
-        
-        if proj["lifetime"] > 0:
-            proj_rect = pygame.Rect(int(proj["x"]) - 12, int(proj["y"]) - 12, 24, 24)
-            if player_rect.colliderect(proj_rect):
-                health = max(0, health - 30)
-                set_message("Hit by thrown mace! -30 HP", (255, 80, 60), 1.0)
-                proj_remove.append(i)
-        
-        if proj["lifetime"] <= 0:
-            proj_remove.append(i)
+    if dx > 0:
+        gorlock_last_direction = "right"
+    else:
+        gorlock_last_direction = "left"
     
-    for i in sorted(proj_remove, reverse=True):
-        if 0 <= i < len(gorlock_mace_projectiles):
-            gorlock_mace_projectiles.pop(i)
+    # Move toward player if close enough
+    if dist > 0 and dist < 500:
+        step = gorlock_boss["speed"] * speed_factor * dt_sec
+        gorlock_boss["rect"].x += (dx / dist) * step
+        gorlock_boss["rect"].y += (dy / dist) * step
+        
+        # Keep in bounds
+        gorlock_boss["rect"].x = max(50, min(SCREEN_WIDTH - gorlock_boss["rect"].width - 50, gorlock_boss["rect"].x))
+        gorlock_boss["rect"].y = max(50, min(SCREEN_HEIGHT - gorlock_boss["rect"].height - 50, gorlock_boss["rect"].y))
+    
+    # Update attack cooldown
+    if gorlock_attack_cooldown > 0:
+        gorlock_attack_cooldown -= dt_sec * speed_factor
 
-    if "_taunt_timer" not in gorlock_boss:
-        gorlock_boss["_taunt_timer"] = 30.0
-    gorlock_boss["_taunt_timer"] -= dt_sec * speed_factor
-    if gorlock_boss["_taunt_timer"] <= 0:
-        gorlock_boss["_taunt_timer"] = 30.0
-        gorlock_taunt_active = True
-        gorlock_taunt_timer = 5.0
-        player_stat_multiplier = 0.5
-        set_message("Gorlock taunts! Your strength fades!", (200, 60, 60), 2.0)
+    # Update taunt cooldown (time until Gorlock can taunt again)
+    if gorlock_taunt_cooldown_timer > 0:
+        gorlock_taunt_cooldown_timer = max(0.0, gorlock_taunt_cooldown_timer - dt_sec * speed_factor)
 
+    # If a taunt is active, tick its timer and restore stats when it ends
     if gorlock_taunt_active:
         gorlock_taunt_timer -= dt_sec * speed_factor
         if gorlock_taunt_timer <= 0:
             gorlock_taunt_active = False
-            player_stat_multiplier = 1.0
+            gorlock_taunt_timer = 0.0
+            # restore base stats
+            try:
+                player_stat_multiplier = player_base_stat_multiplier
+                player_move_speed = player_base_move_speed
+            except Exception:
+                pass
 
-    if gorlock_boss["hp"] <= 0 and gorlock_stage == 2:
+    # Opportunistically trigger a taunt instead of an attack
+    # Gorlock may taunt the player if nearby, but only if not already taunting
+    if (not gorlock_taunt_active and gorlock_taunt_cooldown_timer <= 0
+            and gorlock_attack_cooldown <= 0 and dist < 350):
+        # small chance to taunt when ready
+        if random.random() < 0.18:
+            gorlock_taunt_active = True
+            gorlock_taunt_timer = GORLOCK_TAUNT_DURATION
+            gorlock_taunt_cooldown_timer = GORLOCK_TAUNT_COOLDOWN
+            # apply debuff: 50% of base stats
+            try:
+                player_stat_multiplier = player_base_stat_multiplier * 0.5
+                player_move_speed = player_base_move_speed * 0.5
+            except Exception:
+                pass
+            set_message("Gorlock taunts you! Your strength falters!", (255, 60, 60), 3.0)
+    
+    # STAGE 1: Swing mace attacks when close
+    if gorlock_stage == 1:
+        if dist < 200 and gorlock_attack_cooldown <= 0:
+            gorlock_mace_swinging = True
+            gorlock_mace_angle = 0
+            gorlock_attack_cooldown = 2.5
+    
+    # STAGE 2 TRANSITION: At 3000 HP, enter stage 2
+    elif gorlock_stage == 2:
+        # Faster attacks in stage 2
+        if dist < 200 and gorlock_attack_cooldown <= 0:
+            if random.random() < 0.4:
+                # Swing mace
+                gorlock_mace_swinging = True
+                gorlock_mace_angle = 0
+            else:
+                # Throw mace
+                throw_gorlock_mace(dx, dy, dist)
+            gorlock_attack_cooldown = 2.0
+    
+    # MACE SWING - Similar to boss axe swing
+    if gorlock_mace_swinging:
+        gorlock_mace_angle += 12
+        if gorlock_mace_angle >= 180:
+            gorlock_mace_swinging = False
+            gorlock_mace_angle = 0
+            
+            # Check hit after swing completes
+            mace_rect = calculate_gorlock_mace_rect()
+            if player_rect.colliderect(mace_rect):
+                damage = 25
+                apply_player_damage(damage, f"Gorlock's mace hit for {damage} damage!", (255, 100, 80), 1.2)
+    
+    # Update thrown maces
+    update_gorlock_thrown_maces(dt_sec, speed_factor)
+    
+    # STAGE TRANSITION
+    if gorlock_stage == 1 and gorlock_boss["hp"] <= 3000:
+        gorlock_stage = 2
+        set_message("Gorlock enrages! Stage 2!", (255, 120, 100), 3.0)
+    
+    # CHECK DEFEAT
+    if gorlock_boss["hp"] <= 0:
         gorlock_defeated = True
-        set_message("Gorlock the Time Eater is defeated!", (200, 255, 200), 4.0)
+        inventory["Time Shards"] += 1
+        set_message("Gorlock falls! Time Shard obtained!", (200, 255, 100), 4.0)
+        start_cutscene([
+            "The monstrous figure crumbles to dust.",
+            "The timeline trembles as Gorlock fades.",
+            "His temporal power returns to the void.",
+            "Only Kael remains—the source of corruption."
+        ], line_duration=3.0)
+
+def update_gorlock_activation_prompt():
+    """Clear Gorlock warning if player walks away without confirming."""
+    global gorlock_activation_pending
+    if not gorlock_activation_pending:
+        return
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 2, 1) or gorlock_boss is not None or gorlock_defeated:
+        gorlock_activation_pending = False
+        return
+    room_info = room_data.get(room_key, {})
+    altar = next((o for o in room_info.get("objects", []) if o.get("type") == "gorlock_altar"), None)
+    if not altar:
+        gorlock_activation_pending = False
+        return
+    altar_rect = pygame.Rect(altar["x"], altar["y"], altar["width"], altar["height"])
+    if not player_rect.colliderect(altar_rect.inflate(50, 50)):
+        gorlock_activation_pending = False
+
+def calculate_gorlock_mace_rect():
+    """Calculate the position of Gorlock's swinging mace."""
+    if not gorlock_boss:
+        return pygame.Rect(0, 0, 0, 0)
+    
+    center_x = gorlock_boss["rect"].centerx
+    center_y = gorlock_boss["rect"].centery
+    
+    radius = 120  # Large swing radius
+    angle_rad = math.radians(gorlock_mace_angle)
+    
+    if gorlock_last_direction == "right":
+        mace_x = center_x + radius * math.cos(angle_rad)
+        mace_y = center_y + radius * math.sin(angle_rad)
+    else:
+        mace_x = center_x - radius * math.cos(angle_rad)
+        mace_y = center_y + radius * math.sin(angle_rad)
+    
+    return pygame.Rect(mace_x - 60, mace_y - 60, 120, 120)
+
+def throw_gorlock_mace(dx, dy, dist):
+    """Throw mace toward player."""
+    if not gorlock_boss or dist <= 0:
+        return
+    
+    speed = 450
+    gorlock_mace_thrown.append({
+        "x": float(gorlock_boss["rect"].centerx),
+        "y": float(gorlock_boss["rect"].centery),
+        "vx": (dx / dist) * speed,
+        "vy": (dy / dist) * speed,
+        "angle": 0,
+        "lifetime": 8.0,
+        "damage": 15
+    })
+    set_message("Gorlock hurls his mace!", (255, 120, 80), 1.0)
+
+def update_gorlock_thrown_maces(dt_sec, speed_factor):
+    """Update positions of thrown maces and check collisions."""
+    global gorlock_mace_thrown, health
+    
+    remove_indices = []
+    
+    for i, mace in enumerate(gorlock_mace_thrown):
+        mace["x"] += mace["vx"] * dt_sec * speed_factor
+        mace["y"] += mace["vy"] * dt_sec * speed_factor
+        mace["angle"] += 15
+        mace["lifetime"] -= dt_sec * speed_factor
+        
+        # Remove if off screen or lifetime expired
+        if (mace["x"] < -100 or mace["x"] > SCREEN_WIDTH + 100 or 
+            mace["y"] < -100 or mace["y"] > SCREEN_HEIGHT + 100):
+            remove_indices.append(i)
+            continue
+        
+        if mace["lifetime"] <= 0:
+            remove_indices.append(i)
+            continue
+        
+        # Check collision with player
+        mace_rect = pygame.Rect(mace["x"] - 40, mace["y"] - 40, 80, 80)
+        if player_rect.colliderect(mace_rect):
+            damage = mace["damage"]
+            apply_player_damage(damage, f"Hit by thrown mace for {damage} damage!", (255, 80, 60), 1.0)
+            remove_indices.append(i)
+    
+    # Remove hit maces
+    for i in sorted(remove_indices, reverse=True):
+        gorlock_mace_thrown.pop(i)
 
 def draw_gorlock_boss(surface):
+    """Draw Gorlock and his attacks with large rotating maces."""
     if not gorlock_boss or gorlock_defeated:
         return
     room_key = tuple(current_room_coords)
     if room_key != (2, 2, 1):
         return
+    
     rect = gorlock_boss["rect"]
+    
+    # Draw Gorlock sprite
     gorlock_sprite = load_image("npcs/gorlock.png", rect.width, rect.height)
     if gorlock_sprite:
         surface.blit(gorlock_sprite, rect)
     else:
         pygame.draw.rect(surface, (80, 20, 20), rect)
     
+    # Draw HP bar above Gorlock
     bar_w = rect.width
     bar_x = rect.x
     bar_y = rect.y - 14
@@ -4252,23 +4809,37 @@ def draw_gorlock_boss(surface):
     hp_ratio = max(0, gorlock_boss["hp"]) / max(1, gorlock_boss["max_hp"])
     pygame.draw.rect(surface, (200, 40, 40), (bar_x, bar_y, int(bar_w * hp_ratio), 8))
     
-    mace_sprite = load_image("projectiles/mace.png", 24, 24)
-    for proj in gorlock_mace_projectiles:
-        if proj["lifetime"] > 0:
-            proj_rect = pygame.Rect(int(proj["x"]) - 12, int(proj["y"]) - 12, 24, 24)
-            if mace_sprite:
-                surface.blit(mace_sprite, proj_rect)
-            else:
-                pygame.draw.circle(surface, (140, 80, 40), (int(proj["x"]), int(proj["y"])), 12)
-
-def draw_screen_tint(surface):
-    if gorlock_taunt_active:
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        alpha = int(120)
-        overlay.fill((180, 0, 0, alpha))
-        surface.blit(overlay, (0, 0))
+    # Draw swinging mace - VERY LARGE, rotating
+    if gorlock_mace_swinging:
+        mace_rect = calculate_gorlock_mace_rect()
+        mace_img = load_image("projectiles/mace.png", 120, 120)  # VERY LARGE
+        
+        if mace_img:
+            rotated_mace = pygame.transform.rotate(mace_img, -gorlock_mace_angle)
+            if gorlock_last_direction == "left":
+                rotated_mace = pygame.transform.flip(rotated_mace, True, False)
+            surface.blit(rotated_mace, (mace_rect.x, mace_rect.y))
+        else:
+            # Fallback: draw large circle
+            pygame.draw.circle(surface, (180, 100, 50), (mace_rect.centerx, mace_rect.centery), 60)
+    
+    # Draw thrown maces - VERY LARGE, rotating
+    for mace in gorlock_mace_thrown:
+        mace_img = load_image("projectiles/mace.png", 100, 100)  # VERY LARGE
+        
+        if mace_img:
+            rotated_mace = pygame.transform.rotate(mace_img, -mace["angle"])
+            surface.blit(rotated_mace, (mace["x"] - 50, mace["y"] - 50))
+        else:
+            # Fallback: draw large circle
+            pygame.draw.circle(surface, (180, 100, 50), (int(mace["x"]), int(mace["y"])), 50)
+    
+    # Draw stage indicator
+    stage_text = font.render(f"Stage {gorlock_stage}", True, (255, 100, 100))
+    surface.blit(stage_text, (rect.x + 10, rect.y - 30))
 
 def spawn_kael_boss():
+    """Spawn Kael in the Temporal Altar."""
     global kael_boss, kael_phase
     kael_phase = 1
     kael_boss = {
@@ -4280,7 +4851,27 @@ def spawn_kael_boss():
     }
     set_message("Kael emerges from the temporal rift!", (200, 180, 255), 2.5)
 
+def drop_kael_relic():
+    """Drop Kael's relic once at the center of the Temporal Altar room."""
+    global kael_key_given
+    if kael_key_given:
+        return
+    room_info = room_data.get((2, 1, 2), {})
+    items = room_info.setdefault("items", [])
+    if any(it.get("id") == "relic_kael" for it in items):
+        kael_key_given = True
+        return
+    items.append({
+        "type": "relic",
+        "x": SCREEN_WIDTH // 2 - 20,
+        "y": SCREEN_HEIGHT // 2 - 20,
+        "id": "relic_kael",
+    })
+    kael_key_given = True
+    set_message("Kael defeated! A Relic has appeared.", (180, 255, 220), 3.0)
+
 def update_kael_boss(dt):
+    """Update Kael boss behavior and projectiles."""
     global kael_boss, kael_defeated, kael_phase
     room_key = tuple(current_room_coords)
     if room_key != (2, 1, 2) or not kael_boss or kael_defeated:
@@ -4323,19 +4914,26 @@ def update_kael_boss(dt):
                 "dx": (ddx / d) * speed,
                 "dy": (ddy / d) * speed,
                 "radius": 6 + kael_phase,
-                "damage": 10 + kael_phase * 2,
+                "damage": 6 + kael_phase,
                 "hostile": True,
             })
 
 def draw_kael_boss(surface):
+    """Draw Kael and his aura."""
     if not kael_boss or kael_defeated:
         return
     room_key = tuple(current_room_coords)
     if room_key != (2, 1, 2):
         return
     rect = kael_boss["rect"]
-    pygame.draw.rect(surface, (60, 40, 90), rect)
-    pygame.draw.rect(surface, (160, 120, 220), rect, 3)
+    img = load_npc_image("kael")
+    if img:
+        if img.get_size() != (rect.width, rect.height):
+            img = pygame.transform.scale(img, (rect.width, rect.height))
+        surface.blit(img, rect)
+    else:
+        pygame.draw.rect(surface, (60, 40, 90), rect)
+        pygame.draw.rect(surface, (160, 120, 220), rect, 3)
     pygame.draw.circle(surface, (120, 180, 255), rect.center, rect.width // 2, 2)
 
     bar_w = rect.width + 40
@@ -4345,33 +4943,113 @@ def draw_kael_boss(surface):
     hp_ratio = max(0, kael_boss["hp"]) / max(1, kael_boss["max_hp"])
     pygame.draw.rect(surface, (255, 80, 120), (bar_x, bar_y, int(bar_w * hp_ratio), 7))
 
+def interact_temporal_altar(x, y):
+    """Interact with the Temporal Altar to activate it."""
+    global temporal_altar_activated, kael_boss
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 1, 2):
+        return
+    
+    if temporal_altar_activated:
+        set_message("The altar is already active.", (150, 150, 255), 2.0)
+        return
+    
+    if not gorlock_defeated:
+        set_message("The altar requires the essence of Gorlock to activate.", (150, 100, 100), 2.5)
+        return
+    
+    temporal_altar_activated = True
+    set_message("The altar resonates with temporal energy!", (200, 255, 200), 3.0)
+    
+    # Trigger Kael boss encounter if not already active
+    if kael_boss is None and not kael_defeated:
+        start_cutscene([
+            "The altar pulses with ancient power.",
+            "A rift tears open in the fabric of time.",
+            "Kael, the Time Tyrant, materializes before you.",
+            "The final confrontation has begun..."
+        ], line_duration=3.0, on_complete=spawn_kael_boss)
+
+def draw_temporal_altar_hint(surface):
+    """Draw hint text for Temporal Altar interaction."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 1, 2):
+        return
+    if temporal_altar_activated or kael_defeated:
+        return
+    
+    if gorlock_defeated:
+        altar_rect = pygame.Rect(330, 250, 140, 120)
+        if player_rect.colliderect(altar_rect.inflate(100, 100)):
+            hint_font = pygame.font.SysFont(None, 24)
+            hint_text = hint_font.render("Press F to activate the Temporal Altar", True, (200, 255, 200))
+            surface.blit(hint_text, (SCREEN_WIDTH // 2 - 140, 50))
+
+def draw_timeless_sanctuary_final(surface):
+    """Draw and manage the final ending sequence in Timeless Sanctuary."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 0, 2):
+        return
+    
+    # Draw the final altar/pedestal at center
+    pedestal_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT // 2 - 60, 100, 120)
+    pygame.draw.rect(surface, (200, 180, 255), pedestal_rect)
+    pygame.draw.rect(surface, (255, 255, 100), pedestal_rect, 3)
+    
+    # Draw interaction hint
+    if player_rect.colliderect(pedestal_rect.inflate(80, 80)):
+        hint_font = pygame.font.SysFont(None, 26)
+        hint_text = hint_font.render("Press F to complete the ritual", True, (255, 255, 100))
+        surface.blit(hint_text, (SCREEN_WIDTH // 2 - 130, SCREEN_HEIGHT // 2 - 150))
+
+def interact_timeless_pedestal(x, y):
+    """Interact with the final pedestal to trigger ending."""
+    room_key = tuple(current_room_coords)
+    if room_key != (2, 0, 2):
+        return
+    
+    if inventory["Time Shards"] < 3:
+        set_message("The timeline is not yet ready for restoration.", (150, 100, 150), 2.5)
+        return
+    
+    # Trigger final cutscene
+    start_cutscene([
+        "You place all three Time Shards upon the pedestal.",
+        "They merge with a brilliant light, piercing the void.",
+        "The corrupted timelines collapse inward.",
+        "Reality stabilizes as the Time Tyrant's influence dissolves.",
+        "The world begins to remember itself.",
+        "",
+        "Arin, you have restored the timeline.",
+        "The echoes of the multiverse fade into silence.",
+        "A new age begins, free from temporal corruption.",
+        "",
+        "THE END"
+    ], line_duration=4.0, on_complete=start_end_scene)
+
 def draw_level3_room_extras(surface, room_key):
+    """Draw and register dynamic Level 3 elements."""
     global interactive_objects, colliders, hazard_zones, echoes_rewards_dropped
     if room_key == (2, 2, 0):
-        if jungle_traps_active and not jungle_cleared:
-            for rect in jungle_trap_rects:
-                hazard_zones.append(rect)
-                pygame.draw.rect(surface, (200, 80, 40), rect)
-            if player_rect.colliderect(jungle_proximity_trap.inflate(30, 30)):
-                hazard_zones.append(jungle_proximity_trap)
-                pygame.draw.rect(surface, (200, 100, 60), jungle_proximity_trap)
-        draw_time_spirits(surface)
+        for rect in jungle_spike_rects:
+            spike_top = rect.y
+            spike_bottom = rect.y + rect.height
+            spike_width = rect.width // 4
+            for i in range(4):
+                x0 = rect.x + i * spike_width
+                points = [(x0, spike_bottom), (x0 + spike_width // 2, spike_top), (x0 + spike_width, spike_bottom)]
+                pygame.draw.polygon(surface, (120, 120, 120), points)
+                pygame.draw.polygon(surface, (200, 200, 200), points, 2)
 
     if room_key == (2, 2, 2):
-        if not cave_entrance_revealed:
-            pygame.draw.rect(surface, (40, 80, 40), cave_blocker_rect)
-            colliders.append(cave_blocker_rect)
-        else:
-            entrance_rect = pygame.Rect(610, 40, 150, 80)
-            pygame.draw.rect(surface, (60, 100, 140), entrance_rect)
-            pygame.draw.rect(surface, (120, 200, 255), entrance_rect, 2)
-        pygame.draw.rect(surface, (80, 120, 120), cave_reveal_rect, 2)
         draw_cave_guardians(surface)
-        if cave_relic_available and not cave_relic_collected:
-            relic_rect = pygame.Rect(360, 120, 70, 70)
-            pygame.draw.rect(surface, (100, 180, 255), relic_rect)
-            pygame.draw.rect(surface, (220, 240, 255), relic_rect, 3)
-            interactive_objects.append({"rect": relic_rect, "type": "relic", "x": relic_rect.x, "y": relic_rect.y})
+        if DEBUG_MODE:
+            debug_surface = pygame.Surface((waterfall_water_rect.width, waterfall_water_rect.height), pygame.SRCALPHA)
+            debug_surface.fill((40, 140, 200, 80))
+            surface.blit(debug_surface, (waterfall_water_rect.x, waterfall_water_rect.y))
+            pygame.draw.rect(surface, (80, 200, 255), waterfall_water_rect, 2)
+            label = pygame.font.SysFont(None, 20).render("WATER", True, (220, 255, 255))
+            surface.blit(label, (waterfall_water_rect.x + 6, waterfall_water_rect.y + 6))
 
     if room_key == (2, 1, 0):
         for rect in lava_boundary_rects:
@@ -4411,7 +5089,21 @@ def draw_level3_room_extras(surface, room_key):
         draw_gorlock_boss(surface)
 
 def handle_room_entry(new_room, old_room):
+    """Trigger one-time events when entering Level 3 rooms."""
     global kael_origin_revealed, echoes_miniboss, echoes_boss_defeated, kael_boss
+    global gorlock_taunt_active, gorlock_taunt_timer, player_stat_multiplier, player_move_speed
+    
+    # Clear Gorlock taunt state when leaving his room
+    if old_room == (2, 2, 1) and new_room != (2, 2, 1):
+        try:
+            gorlock_taunt_active = False
+            gorlock_taunt_timer = 0.0
+            # Restore base stats when leaving taunt room
+            player_stat_multiplier = player_base_stat_multiplier
+            player_move_speed = player_base_move_speed
+        except Exception:
+            pass
+    
     if new_room == (2, 1, 1) and not kael_origin_revealed:
         kael_origin_revealed = True
         start_cutscene([
@@ -4422,32 +5114,22 @@ def handle_room_entry(new_room, old_room):
         ], line_duration=3.0)
         set_message("Kael's origin revealed.", (200, 220, 255), 2.0)
 
-    if new_room == (2, 2, 1) and not gorlock_defeated and gorlock_boss is None:
-        spawn_gorlock_boss()
-
     if new_room == (2, 0, 1) and not echoes_boss_defeated and echoes_miniboss is None:
         spawn_echoes_miniboss()
 
     if new_room == (2, 1, 2) and not kael_defeated and kael_boss is None:
         spawn_kael_boss()
 
-    if new_room == (2, 2, 2):
+    # Initialize Waterfall Cave timing challenge
+    if new_room == (2, 2, 2) and not waterfall_challenge_complete:
         init_cave_guardians()
+        init_waterfall_challenge()
 
-    if new_room == (2, 0, 2) and not timeline_restored:
-        def _finish_ending():
-            global timeline_restored, level3_complete
-            timeline_restored = True
-            level3_complete = True
-            set_message("Timeline restored.", (180, 255, 200), 3.0)
-        start_cutscene([
-            "The relics merge, restoring the fractured timeline.",
-            "The sanctuary hums as the last echoes fade.",
-            "Arin breathes as time steadies once more."
-        ], line_duration=3.0, on_complete=_finish_ending)
+    # Timeless Sanctuary ending should only trigger via pedestal interaction.
 
 def draw_health_bar(surface):
                                                                                  
+    """Draw permanent health bar at bottom middle of screen."""
     health_width = 400
     health_x = SCREEN_WIDTH // 2 - health_width // 2
     health_y = SCREEN_HEIGHT - 50
@@ -4455,13 +5137,22 @@ def draw_health_bar(surface):
 
     pygame.draw.rect(surface, (100, 0, 0), (health_x, health_y, health_width, 30))
 
-    pygame.draw.rect(surface, (0, 255, 0), (health_x, health_y, health_width * (health / max_health), 30))
+    if invincibility_timer > 0:
+        pygame.draw.rect(surface, (80, 255, 200), (health_x, health_y, health_width, 30))
+    else:
+        pygame.draw.rect(surface, (0, 255, 0), (health_x, health_y, health_width * (health / max_health), 30))
 
     pygame.draw.rect(surface, (255, 255, 255), (health_x, health_y, health_width, 30), 2)
     
 
-    health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
+    if invincibility_timer > 0:
+        health_text = font.render("Health: INFINITE", True, (255, 255, 255))
+    else:
+        health_text = font.render(f"Health: {int(health)}/{max_health}", True, (255, 255, 255))
     surface.blit(health_text, (health_x + 10, health_y + 5))
+    if invincibility_timer > 0:
+        inv_text = small_font.render(f"Invincible: {int(invincibility_timer)}s", True, (120, 220, 255))
+        surface.blit(inv_text, (health_x, health_y - 18))
     
 
     armor_text = small_font.render(f"Armor Level: {armor_level}", True, (200, 255, 200))
@@ -4469,6 +5160,7 @@ def draw_health_bar(surface):
 
 def draw_hud(surface):
                                                                               
+    """Draw HUD with inventory (health bar is now drawn separately)."""
     if not hud_visible:
         return
     
@@ -4486,6 +5178,7 @@ def draw_hud(surface):
 
 def draw_minimap(surface, level, row, col):
                                                                           
+    """Draw minimap showing current room."""
     if not map_visible:
         return
     
@@ -4513,6 +5206,7 @@ def draw_minimap(surface, level, row, col):
     surface.blit(name_text, (map_x, map_y + map_size + 10))
 
 def draw_quest_log(surface):
+    """Draw quest log."""
     if not quest_log_visible:
         return
     
@@ -4536,14 +5230,69 @@ def draw_quest_log(surface):
             y += 40
 
 def draw_message(surface):
+    """Display temporary messages."""
     if hud_message_timer > 0 and hud_message:
         msg = font.render(hud_message, True, hud_message_color)
         rect = msg.get_rect(center=(SCREEN_WIDTH // 2, 50))
-        pygame.draw.rect(surface, (0, 0, 0), rect.inflate(20, 10))
-        pygame.draw.rect(surface, hud_message_color, rect.inflate(20, 10), 2)
+        pygame.draw.rect(surface, (0, 0, 0), rect.inflate(60, 20))
+        pygame.draw.rect(surface, hud_message_color, rect.inflate(60, 20), 2)
         surface.blit(msg, rect)
 
+
+def draw_screen_tint(surface):
+    """Apply simple ambient tints and low-health feedback.
+
+    This function is intentionally lightweight and defensive — it won't
+    crash if expected globals are missing. It tints the whole screen
+    slightly depending on the current level, and adds a faint red flash
+    when the player's health is very low.
+    """
+    try:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        # Level-specific ambient tints
+        level = current_room_coords[0] if isinstance(current_room_coords, (list, tuple)) else 0
+        if level == 1:
+            # Cyberpunk / neon city: cool blue/purple wash
+            overlay.fill((30, 60, 120, 28))
+        elif level == 2:
+            # Jungle/temple: subtle greenish wash
+            overlay.fill((10, 40, 20, 18))
+        else:
+            # Default: very faint vignette (almost invisible)
+            overlay.fill((0, 0, 0, 0))
+
+        surface.blit(overlay, (0, 0))
+
+        # Low-health flash: adds urgency when health is low
+        try:
+            if max_health > 0 and health / max_health < 0.25:
+                # stronger flash the lower the health
+                ratio = 1.0 - (health / max_health)
+                alpha = int(40 + ratio * 120)
+                flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                flash.fill((180, 30, 30, alpha))
+                surface.blit(flash, (0, 0))
+        except Exception:
+            pass
+        # Gorlock taunt overlay (strong red wash while taunted)
+        try:
+            if 'gorlock_taunt_active' in globals() and gorlock_taunt_active:
+                # compute intensity from remaining taunt time (if available)
+                remaining = gorlock_taunt_timer if 'gorlock_taunt_timer' in globals() else GORLOCK_TAUNT_DURATION
+                dur = GORLOCK_TAUNT_DURATION if 'GORLOCK_TAUNT_DURATION' in globals() else 3.0
+                ratio = max(0.0, min(1.0, remaining / dur))
+                alpha = int(180 * ratio) + 30
+                red = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                red.fill((200, 30, 30, alpha))
+                surface.blit(red, (0, 0))
+        except Exception:
+            pass
+    except Exception:
+        # Be conservative: don't let tinting break the whole draw loop
+        return
+
 def draw_dialogue(surface):
+    """Display NPC dialogue."""
     if not dialogue_active or not current_dialogue:
         return
     
@@ -4577,6 +5326,7 @@ def draw_dialogue(surface):
     surface.blit(hint, (box.right - hint.get_width() - 20, box.bottom - 30))
 
 def start_cutscene(lines, line_duration=2.5, on_complete=None):
+    """Start an unskippable cutscene sequence."""
     global cutscene_active, cutscene_lines, cutscene_index, cutscene_timer
     global cutscene_line_duration, cutscene_on_complete
     cutscene_active = True
@@ -4586,7 +5336,21 @@ def start_cutscene(lines, line_duration=2.5, on_complete=None):
     cutscene_line_duration = line_duration
     cutscene_on_complete = on_complete
 
+def start_end_scene():
+    """Begin the final animated end screen."""
+    global end_scene_active, end_scene_timer
+    end_scene_active = True
+    end_scene_timer = 0.0
+
+def update_end_scene(dt):
+    """Advance end scene timer."""
+    global end_scene_timer
+    if not end_scene_active:
+        return
+    end_scene_timer += dt / 1000.0
+
 def update_cutscene(dt):
+    """Advance cutscene lines automatically."""
     global cutscene_active, cutscene_index, cutscene_timer
     if not cutscene_active:
         return
@@ -4595,6 +5359,7 @@ def update_cutscene(dt):
         advance_cutscene_line()
 
 def advance_cutscene_line():
+    """Advance cutscene by one line (manual or auto)."""
     global cutscene_active, cutscene_index, cutscene_timer
     cutscene_timer = 0.0
     cutscene_index += 1
@@ -4607,6 +5372,7 @@ def advance_cutscene_line():
                 pass
 
 def draw_cutscene(surface):
+    """Draw an unskippable cutscene overlay."""
     if not cutscene_active or not cutscene_lines:
         return
     box = pygame.Rect(50, SCREEN_HEIGHT - 200, SCREEN_WIDTH - 100, 150)
@@ -4637,7 +5403,34 @@ def draw_cutscene(surface):
     hint = small_font.render("Press SPACE to continue...", True, (160, 180, 200))
     surface.blit(hint, (box.right - hint.get_width() - 20, box.bottom - 30))
 
+def draw_end_scene(surface):
+    """Draw the final animated end screen."""
+    if not end_scene_active:
+        return
+    t = end_scene_timer
+    fade = min(255, int(t * 120))
+    pulse = 0.6 + 0.4 * math.sin(t * 2.0)
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((5, 8, 18, min(220, fade)))
+    surface.blit(overlay, (0, 0))
+    glow_color = (80, 140, 255, int(80 * pulse))
+    glow = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    pygame.draw.circle(glow, glow_color, (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 220)
+    surface.blit(glow, (0, 0))
+
+    title_font = pygame.font.SysFont(None, 90)
+    subtitle_font = pygame.font.SysFont(None, 36)
+    title = title_font.render("THE END", True, (255, 255, 255))
+    title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 60))
+    surface.blit(title, title_rect)
+
+    line1 = subtitle_font.render("YOU HAVE DONE IT", True, (220, 240, 255))
+    line2 = subtitle_font.render("THANKS FOR PLAYING", True, (200, 220, 240))
+    surface.blit(line1, line1.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)))
+    surface.blit(line2, line2.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60)))
+
 def draw_temple_puzzle_overlay(surface):
+    """Draw the temple symbol puzzle overlay."""
     global temple_puzzle_tile_rects
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 200))
@@ -4683,6 +5476,7 @@ def draw_temple_puzzle_overlay(surface):
         y += 24
 
 def draw_crafting_menu(surface):
+    """Draw the crafting interface in the Ruins Plaza."""
     if not crafting_visible:
         return
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -4693,34 +5487,81 @@ def draw_crafting_menu(surface):
     pygame.draw.rect(surface, (25, 35, 25), box)
     pygame.draw.rect(surface, (120, 200, 140), box, 4)
 
-    title = font.render("Ruins Crafting Table", True, (200, 255, 210))
+    title = font.render("Ruins Plaza Potion Shop", True, (200, 255, 210))
     surface.blit(title, (box.centerx - title.get_width() // 2, box.y + 20))
-
-    recipe = small_font.render("Recipe: 2 Herbs + 1 Gold = 1 Health Potion", True, (230, 230, 230))
-    surface.blit(recipe, (box.x + 40, box.y + 80))
 
     stock = small_font.render(
         f"Herbs: {inventory['Herbs']}   Gold: {inventory['Gold']}   Potions: {inventory['Health Potions']}",
         True,
         (200, 220, 200),
     )
-    surface.blit(stock, (box.x + 40, box.y + 110))
+    surface.blit(stock, (box.x + 40, box.y + 80))
 
-    uses = small_font.render(f"Crafting uses left: {crafting_uses_left}", True, (255, 220, 140))
-    surface.blit(uses, (box.x + 40, box.y + 140))
+    item_buttons = []
+    y = box.y + 130
+    relics_ok = inventory.get("Relics", 0) >= 4
+    items = [
+        ("health_potion", "Health Potion", f"{HEALTH_POTION_SHOP_COST} Gold", ["+30 HP (Press H)"], inventory["Gold"] >= HEALTH_POTION_SHOP_COST, False),
+        ("invincibility_potion", "Invincibility Potion", f"{INVINCIBILITY_HERB_COST} Herbs + 4 Relics", ["Only buy this if you are", "going to kill the main boss"], inventory["Herbs"] >= INVINCIBILITY_HERB_COST and relics_ok, invincibility_brewed),
+    ]
+    for item_id, name, cost_text, desc_lines, can_purchase, owned in items:
+        item_rect = pygame.Rect(box.x + 30, y, box.width - 60, 88)
+        y += 102
+        status_text = "OWNED" if owned else ""
+        if owned:
+            can_purchase = False
+        bg_color = (50, 55, 50) if can_purchase else (60, 40, 40)
+        border_color = (120, 200, 140) if can_purchase else (200, 120, 120)
+        pygame.draw.rect(surface, bg_color, item_rect)
+        pygame.draw.rect(surface, border_color, item_rect, 3)
+
+        name_text = font.render(name, True, (255, 255, 255))
+        surface.blit(name_text, (item_rect.x + 16, item_rect.y + 10))
+        for i, line in enumerate(desc_lines):
+            desc_text = small_font.render(line, True, (200, 200, 200))
+            surface.blit(desc_text, (item_rect.x + 16, item_rect.y + 40 + (i * 16)))
+        cost_render = font.render(cost_text, True, (255, 215, 0))
+        surface.blit(cost_render, (item_rect.right - 180, item_rect.y + 10))
+
+        if status_text:
+            status = font.render(status_text, True, (120, 255, 120))
+            surface.blit(status, (item_rect.right - 150, item_rect.y + 56))
+        else:
+            button_rect = pygame.Rect(item_rect.right - 120, item_rect.y + 52, 90, 30)
+            if can_purchase:
+                pygame.draw.rect(surface, (80, 120, 80), button_rect)
+                pygame.draw.rect(surface, (120, 200, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (200, 255, 200))
+                item_buttons.append((button_rect, item_id))
+            else:
+                pygame.draw.rect(surface, (120, 80, 80), button_rect)
+                pygame.draw.rect(surface, (200, 120, 120), button_rect, 2)
+                button_text = small_font.render("BUY", True, (255, 200, 200))
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width() // 2,
+                                       button_rect.centery - button_text.get_height() // 2))
+
+    close_rect = pygame.Rect(box.centerx - 60, box.bottom - 60, 120, 40)
+    pygame.draw.rect(surface, (120, 80, 80), close_rect)
+    pygame.draw.rect(surface, (200, 120, 120), close_rect, 2)
+    close_text = font.render("CLOSE", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
+                              close_rect.centery - close_text.get_height() // 2))
 
     controls = [
-        "Press C to craft a potion.",
-        "Press ENTER to confirm you are ready to continue.",
-        "Press ESC to close the menu."
+        "Click BUY or press 1 for Health Potion.",
+        "Press 2 for Invincibility Potion.",
+        "Press ESC to close."
     ]
-    y = box.y + 200
+    y = close_rect.y - 70
     for line in controls:
         text = small_font.render(line, True, (220, 220, 220))
         surface.blit(text, (box.x + 40, y))
-        y += 26
+        y += 22
+
+    return item_buttons, close_rect
 
 def reset_temple_puzzle(randomize=True):
+    """Reset the temple puzzle tiles."""
     global temple_puzzle_tiles
     if randomize:
         temple_puzzle_tiles = [random.randint(0, 3) for _ in range(3)]
@@ -4728,19 +5569,23 @@ def reset_temple_puzzle(randomize=True):
         temple_puzzle_tiles = [0, 0, 0]
 
 def check_temple_puzzle():
+    """Check the temple puzzle solution."""
     global temple_puzzle_attempts, temple_puzzle_solved, temple_gate_unlocked, temple_puzzle_visible, health
+    global temple_code_obtained
     temple_puzzle_attempts += 1
     if temple_puzzle_tiles == temple_puzzle_solution:
         temple_puzzle_solved = True
         temple_gate_unlocked = True
         temple_puzzle_visible = False
-        set_message("The gate unlocks!", (180, 255, 180), 2.5)
+        temple_code_obtained = True
+        set_message("The gate unlocks!", (180, 255, 180), 3.0)
     else:
         reset_temple_puzzle(randomize=True)
-        health = max(0, health - 5)
+        apply_player_damage(5)
         set_message("Incorrect symbols! The temple resets.", (255, 120, 120), 2.0)
 
 def handle_temple_puzzle_click(pos):
+    """Rotate puzzle tiles when clicked."""
     if not temple_puzzle_visible:
         return
     for i, rect in enumerate(temple_puzzle_tile_rects):
@@ -4748,7 +5593,152 @@ def handle_temple_puzzle_click(pos):
             temple_puzzle_tiles[i] = (temple_puzzle_tiles[i] + 1) % 4
             return
 
+def draw_waterfall_code_puzzle(surface):
+    """Draw the waterfall code input interface."""
+    if not waterfall_code_puzzle_visible:
+        return
+    
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 220))
+    surface.blit(overlay, (0, 0))
+    
+    # Main dialog box
+    box_w = 600
+    box_h = 400
+    box_x = (SCREEN_WIDTH - box_w) // 2
+    box_y = (SCREEN_HEIGHT - box_h) // 2
+    box = pygame.Rect(box_x, box_y, box_w, box_h)
+    
+    # Draw box background
+    pygame.draw.rect(surface, (20, 50, 80), box)
+    pygame.draw.rect(surface, (100, 180, 255), box, 8)
+    
+    # Title
+    title = title_font.render("CODE LOCK", True, (100, 220, 255))
+    title_rect = title.get_rect(center=(box.centerx, box.y + 50))
+    surface.blit(title, title_rect)
+    
+    # Prompt
+    prompt = font.render("Enter the code:", True, (200, 220, 255))
+    surface.blit(prompt, (box.x + 50, box.y + 130))
+    
+    # Input box - LARGE
+    input_box = pygame.Rect(box.x + 50, box.y + 180, box.width - 100, 100)
+    pygame.draw.rect(surface, (0, 20, 40), input_box)
+    pygame.draw.rect(surface, (100, 220, 255), input_box, 6)
+    
+    # Display the typed text in LARGE font
+    input_display = waterfall_code_input.upper() if waterfall_code_input else ""
+    if input_display:
+        # Use larger font for visible text
+        big_font = pygame.font.SysFont(None, 60)
+        input_text = big_font.render(input_display, True, (100, 255, 200))
+        text_rect = input_text.get_rect(center=(input_box.centerx, input_box.centery))
+        surface.blit(input_text, text_rect)
+    else:
+        # Show placeholder
+        placeholder = font.render("(type code here)", True, (100, 150, 180))
+        placeholder_rect = placeholder.get_rect(center=(input_box.centerx, input_box.centery))
+        surface.blit(placeholder, placeholder_rect)
+    
+    # Instructions
+    instr1 = small_font.render("Type the code and press ENTER", True, (200, 220, 200))
+    surface.blit(instr1, (box.x + 50, box.y + 310))
+    
+    instr2 = small_font.render("Press ESC to cancel", True, (180, 200, 200))
+    surface.blit(instr2, (box.x + 50, box.y + 345))
+
+def handle_waterfall_code_input(event):
+    """Handle keyboard input for waterfall code."""
+    global waterfall_code_input, waterfall_code_puzzle_visible, waterfall_code_solved, waterfall_maze_visible
+    
+    if not waterfall_code_puzzle_visible:
+        return
+    
+    # Handle escape
+    if event.key == pygame.K_ESCAPE:
+        waterfall_code_puzzle_visible = False
+        waterfall_code_input = ""
+        return
+    
+    # Handle enter
+    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+        if waterfall_code_input.lower() == waterfall_code_correct.lower():
+            waterfall_code_solved = True
+            waterfall_code_puzzle_visible = False
+            waterfall_maze_visible = True
+            room_info = room_data.get((2, 2, 2), {})
+            items = room_info.setdefault("items", [])
+            if not any(it.get("id") == "relic_waterfall_code" for it in items):
+                items.append({
+                    "type": "relic",
+                    "x": 512,
+                    "y": 262,
+                    "id": "relic_waterfall_code",
+                })
+            set_message("Code accepted! Relic spawned. Navigate the maze.", (100, 255, 200), 3.0)
+            waterfall_code_input = ""
+        else:
+            set_message("Wrong code. Try again.", (255, 100, 100), 2.0)
+            waterfall_code_input = ""
+        return
+    
+    # Handle backspace
+    if event.key == pygame.K_BACKSPACE:
+        waterfall_code_input = waterfall_code_input[:-1]
+        return
+    
+    # Handle letter input from unicode, with a key-name fallback
+    if event.unicode and event.unicode.isalpha():
+        if len(waterfall_code_input) < 10:
+            waterfall_code_input += event.unicode.lower()
+    else:
+        key_name = pygame.key.name(event.key)
+        if len(key_name) == 1 and key_name.isalpha():
+            if len(waterfall_code_input) < 10:
+                waterfall_code_input += key_name.lower()
+
+def draw_waterfall_maze(surface):
+    """Draw the waterfall cave maze challenge."""
+    if not waterfall_maze_visible:
+        return
+    
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    surface.blit(overlay, (0, 0))
+    
+    # Draw maze paths (simplified)
+    maze_start = (400, 350)
+    maze_end = (600, 150)
+    
+    pygame.draw.circle(surface, (100, 255, 100), maze_start, 15)
+    pygame.draw.circle(surface, (255, 100, 100), maze_end, 15)
+    
+    # Draw solution path
+    for i in range(len(waterfall_maze_solution) - 1):
+        p1 = waterfall_maze_solution[i]
+        p2 = waterfall_maze_solution[i + 1]
+        pygame.draw.line(surface, (100, 150, 255), p1, p2, 8)
+    
+    # Draw waypoints
+    for i, point in enumerate(waterfall_maze_solution):
+        color = (100, 200, 255) if i < 4 else (255, 150, 100)
+        pygame.draw.circle(surface, color, point, 8)
+        pygame.draw.circle(surface, (255, 255, 255), point, 8, 2)
+    
+    instruction = small_font.render("Press SPACE to complete.", True, (200, 255, 200))
+    surface.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, 50))
+
+def handle_waterfall_maze_completion():
+    """Reward player for completing maze."""
+    global waterfall_maze_visible, waterfall_code_solved, inventory
+    waterfall_maze_visible = False
+    inventory["Herbs"] = inventory.get("Herbs", 0) + 3
+    set_message("Maze complete! +3 Herbs obtained!", (100, 255, 150), 3.0)
+
+
 def draw_blacksmith_shop(surface):
+    """Draw the improved blacksmith shop interface."""
     if not upgrade_shop_visible:
         return
     
@@ -4876,6 +5866,7 @@ def draw_blacksmith_shop(surface):
     return item_buttons, close_rect
 
 def draw_temple_shop(surface):
+    """Draw the temple crafting shop interface."""
     if not temple_shop_visible:
         return
 
@@ -4883,70 +5874,122 @@ def draw_temple_shop(surface):
     overlay.fill((0, 0, 0, 210))
     surface.blit(overlay, (0, 0))
 
-    shop_rect = pygame.Rect(120, 110, SCREEN_WIDTH - 240, SCREEN_HEIGHT - 220)
-    pygame.draw.rect(surface, (40, 30, 20), shop_rect)
-    pygame.draw.rect(surface, (200, 170, 90), shop_rect, 3)
+    shop_rect = pygame.Rect(50, 50, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 100)
+    pygame.draw.rect(surface, (20, 15, 20), shop_rect)
+    pygame.draw.rect(surface, (200, 170, 90), shop_rect, 4)
 
-    title = title_font.render("TEMPLE CRAFTING", True, (255, 220, 140))
-    surface.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, shop_rect.y + 10))
+    title = title_font.render("RUINS MARKET", True, (255, 220, 140))
+    surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 70))
 
+    gold_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 80, shop_rect.width - 40, 40)
+    pygame.draw.rect(surface, (30, 25, 20), gold_rect)
+    pygame.draw.rect(surface, (255, 215, 0), gold_rect, 2)
     gold_text = font.render(f"Gold: {inventory['Gold']}", True, (255, 215, 0))
-    surface.blit(gold_text, (shop_rect.x + 20, shop_rect.y + 80))
+    surface.blit(gold_text, (gold_rect.centerx - gold_text.get_width()//2, gold_rect.centery - gold_text.get_height()//2))
+
+    stats_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 130, shop_rect.width - 40, 60)
+    pygame.draw.rect(surface, (35, 30, 35), stats_rect)
+    pygame.draw.rect(surface, (140, 110, 60), stats_rect, 2)
+    stats_lines = [
+        f"Sword Damage: {get_sword_damage() if using_sword_weapon else 0}",
+        f"Max Health: {max_health} | Current: {health}",
+        f"Armor Level: {armor_level}/{ARMOR_MAX_LEVEL}",
+        f"Sword Level: {max(0, sword_level)}/{SWORD_MAX_LEVEL}",
+    ]
+    for i, line in enumerate(stats_lines):
+        stat_text = small_font.render(line, True, (230, 210, 170))
+        surface.blit(stat_text, (stats_rect.x + 10, stats_rect.y + 5 + i * 20))
+
+    items_rect = pygame.Rect(shop_rect.x + 20, shop_rect.y + 210, shop_rect.width - 40, shop_rect.height - 280)
+    pygame.draw.rect(surface, (40, 35, 40), items_rect)
+    pygame.draw.rect(surface, (160, 120, 80), items_rect, 2)
+
+    sword_upgrade_cost = int(SWORD_UPGRADE_BASE_COST * (SWORD_UPGRADE_GROWTH ** max(0, sword_level - 1)))
+    sword_upgrade_cost = min(250, sword_upgrade_cost)
+    temple_items = [
+        ("sword", "Temple Sword", "Ancient melee weapon", 25, "Unlocks sword"),
+        ("sword_upgrade", "Sword Upgrade", "Sharpened edge", sword_upgrade_cost, f"Exponential damage boost (Max {SWORD_MAX_LEVEL})"),
+        ("armor", "Temple Armor", "Reinforced plating", 25, "+20 Max Health"),
+        ("health_potion", "Health Potion", "Heals your wounds", 15, "+30 Health"),
+    ]
 
     item_buttons = []
-    y = shop_rect.y + 130
-    for item_id, item in temple_shop_items.items():
-        cost = item["cost"]
-        item_rect = pygame.Rect(shop_rect.x + 30, y, shop_rect.width - 60, 80)
-        y += 100
+    for i, (item_id, name, desc, cost, bonus) in enumerate(temple_items):
+        row = i // 2
+        col = i % 2
+        item_x = items_rect.x + 20 + col * (items_rect.width // 2)
+        item_y = items_rect.y + 20 + row * 120
+        item_bg = pygame.Rect(item_x, item_y, items_rect.width // 2 - 30, 110)
 
-        can_purchase = inventory["Gold"] >= cost
-        status_text = ""
         if item_id == "sword" and using_sword_weapon:
+            bg_color = (50, 40, 30)
+            border_color = (120, 200, 120)
+            status = "OWNED"
             can_purchase = False
-            status_text = "OWNED"
+        elif item_id == "sword_upgrade" and not using_sword_weapon:
+            bg_color = (50, 40, 30)
+            border_color = (200, 120, 120)
+            status = "NEEDS SWORD"
+            can_purchase = False
+        elif item_id == "sword_upgrade" and sword_level >= SWORD_MAX_LEVEL:
+            bg_color = (50, 40, 30)
+            border_color = (120, 200, 120)
+            status = "MAXED"
+            can_purchase = False
         elif item_id == "armor" and armor_level >= ARMOR_MAX_LEVEL:
+            bg_color = (50, 40, 30)
+            border_color = (120, 200, 120)
+            status = "MAXED"
             can_purchase = False
-            status_text = "MAXED"
-
-        bg_color = (50, 50, 60) if can_purchase else (60, 40, 40)
-        border_color = (150, 150, 200) if can_purchase else (200, 120, 120)
-        pygame.draw.rect(surface, bg_color, item_rect)
-        pygame.draw.rect(surface, border_color, item_rect, 3)
-
-        name_text = font.render(item["name"], True, (255, 255, 255))
-        cost_text = font.render(f"{cost} Gold", True, (255, 215, 0))
-        surface.blit(name_text, (item_rect.x + 10, item_rect.y + 10))
-        surface.blit(cost_text, (item_rect.right - 110, item_rect.y + 10))
-
-        if status_text:
-            status = font.render(status_text, True, (120, 255, 120))
-            surface.blit(status, (item_rect.right - 120, item_rect.y + 42))
         else:
-            button_rect = pygame.Rect(item_rect.right - 110, item_rect.y + 40, 90, 30)
+            can_purchase = inventory["Gold"] >= cost
+            status = ""
+            if can_purchase:
+                bg_color = (45, 40, 45)
+                border_color = (160, 120, 80)
+            else:
+                bg_color = (60, 40, 40)
+                border_color = (200, 120, 120)
+
+        pygame.draw.rect(surface, bg_color, item_bg)
+        pygame.draw.rect(surface, border_color, item_bg, 3)
+
+        name_text = font.render(name, True, (255, 255, 255))
+        desc_text = small_font.render(desc, True, (220, 210, 200))
+        cost_text = font.render(f"{cost} Gold", True, (255, 215, 0))
+        bonus_text = small_font.render(bonus, True, (180, 255, 200))
+        surface.blit(name_text, (item_bg.x + 10, item_bg.y + 10))
+        surface.blit(desc_text, (item_bg.x + 10, item_bg.y + 35))
+        surface.blit(cost_text, (item_bg.x + item_bg.width - 110, item_bg.y + 10))
+        surface.blit(bonus_text, (item_bg.x + 10, item_bg.y + 55))
+
+        if status:
+            owned_text = font.render(status, True, (120, 255, 120))
+            surface.blit(owned_text, (item_bg.x + item_bg.width - 95, item_bg.y + 70))
+        else:
+            button_rect = pygame.Rect(item_bg.x + item_bg.width - 90, item_bg.y + 70, 80, 30)
             if can_purchase:
                 pygame.draw.rect(surface, (80, 120, 80), button_rect)
                 pygame.draw.rect(surface, (120, 200, 120), button_rect, 2)
                 button_text = small_font.render("BUY", True, (200, 255, 200))
-                item_buttons.append((button_rect, item_id))
             else:
                 pygame.draw.rect(surface, (120, 80, 80), button_rect)
                 pygame.draw.rect(surface, (200, 120, 120), button_rect, 2)
                 button_text = small_font.render("BUY", True, (255, 200, 200))
-            surface.blit(button_text, (button_rect.centerx - button_text.get_width() // 2,
-                                       button_rect.centery - button_text.get_height() // 2))
+            surface.blit(button_text, (button_rect.centerx - button_text.get_width()//2, button_rect.centery - button_text.get_height()//2))
+            item_buttons.append((button_rect, item_id))
 
-    close_rect = pygame.Rect(shop_rect.centerx - 50, shop_rect.bottom - 50, 100, 40)
-    pygame.draw.rect(surface, (120, 80, 80), close_rect)
-    pygame.draw.rect(surface, (200, 120, 120), close_rect, 2)
-    close_text = font.render("CLOSE", True, (255, 255, 255))
-    surface.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
-                              close_rect.centery - close_text.get_height() // 2))
+    close_rect = pygame.Rect(shop_rect.centerx - 60, shop_rect.bottom - 50, 120, 40)
+    pygame.draw.rect(surface, (100, 60, 80), close_rect)
+    pygame.draw.rect(surface, (200, 120, 150), close_rect, 3)
+    close_text = font.render("EXIT", True, (255, 255, 255))
+    surface.blit(close_text, (close_rect.centerx - close_text.get_width()//2, close_rect.centery - close_text.get_height()//2))
 
     return item_buttons, close_rect
 
 
 def _can_purchase_item(item_id):
+    """Check if an item can be purchased based on game state."""
     item = blacksmith_items[item_id]
     
     if item_id == "weapon":
@@ -4969,8 +6012,8 @@ def _can_purchase_item(item_id):
     return False
 
 def handle_blacksmith_purchase(item_id):
+    """Handle purchasing items from the blacksmith."""
     global player_has_weapon, current_ammo, max_ammo_count, health, max_health, inventory, weapon_level, armor_level
-    global using_sword_weapon, using_laser_weapon
     
     item = blacksmith_items[item_id]
     
@@ -5000,8 +6043,6 @@ def handle_blacksmith_purchase(item_id):
     if item_id == "weapon":
         item["purchased"] = True
         player_has_weapon = True
-        using_sword_weapon = False
-        using_laser_weapon = False
         current_ammo = max_ammo_count 
         set_message(f"Purchased {item['name']}! You can now shoot with SPACE.", (0, 255, 0), 3.0)
         quests["buy_weapon"]["complete"] = True
@@ -5045,10 +6086,29 @@ def handle_blacksmith_purchase(item_id):
     return True
 
 def handle_temple_shop_purchase(item_id):
-    global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, health, max_health, inventory, armor_level
+    """Handle purchases from the temple crafting shop."""
+    global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, health, max_health, inventory, armor_level, sword_level
+
+    if item_id == "sword_upgrade":
+        if not using_sword_weapon:
+            set_message("You need the Temple Sword first.", (255, 200, 0), 2.0)
+            return False
+        if sword_level >= SWORD_MAX_LEVEL:
+            set_message("Sword is already at maximum level!", (255, 200, 0), 2.0)
+            return False
+        upgrade_cost = int(SWORD_UPGRADE_BASE_COST * (SWORD_UPGRADE_GROWTH ** max(0, sword_level - 1)))
+        upgrade_cost = min(250, upgrade_cost)
+        if inventory["Gold"] < upgrade_cost:
+            set_message("Not enough gold for Sword Upgrade!", (255, 0, 0), 2.0)
+            return False
+        inventory["Gold"] -= upgrade_cost
+        sword_level += 1
+        set_message(f"Sword upgraded to level {sword_level}!", (0, 255, 0), 2.0)
+        return True
 
     item = temple_shop_items[item_id]
-    if inventory["Gold"] < item["cost"]:
+    cost = item.get("cost", 0)
+    if inventory["Gold"] < cost:
         set_message(f"Not enough gold for {item['name']}!", (255, 0, 0), 2.0)
         return False
 
@@ -5056,10 +6116,11 @@ def handle_temple_shop_purchase(item_id):
         if using_sword_weapon:
             set_message("You already have a sword.", (255, 200, 0), 2.0)
             return False
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         player_has_weapon = False
         using_laser_weapon = False
         using_sword_weapon = True
+        sword_level = max(1, sword_level)
         current_ammo = max_ammo_count
         if "buy_weapon" in quests:
             quests["buy_weapon"]["complete"] = True
@@ -5072,7 +6133,7 @@ def handle_temple_shop_purchase(item_id):
         if armor_level >= ARMOR_MAX_LEVEL:
             set_message("Armor is already at maximum level!", (255, 200, 0), 2.0)
             return False
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         prev_max = max_health
         armor_level += 1
         max_health = 100 + (armor_level * 20)
@@ -5084,7 +6145,7 @@ def handle_temple_shop_purchase(item_id):
         return True
 
     if item_id == "health_potion":
-        inventory["Gold"] -= item["cost"]
+        inventory["Gold"] -= cost
         inventory["Health Potions"] += 1
         set_message("Purchased Health Potion!", (0, 255, 0), 2.0)
         return True
@@ -5092,7 +6153,100 @@ def handle_temple_shop_purchase(item_id):
     return False
 
 
+def debug_grant_max_gear():
+    """Dev helper to grant max ammo, sword level, and upgrades across all levels."""
+    global player_has_weapon, using_laser_weapon, using_sword_weapon
+    global current_ammo, max_ammo_count, health, max_health, weapon_level, armor_level, sword_level
+    global ammo_packs_purchased, inventory, quests
+
+    player_has_weapon = True
+    using_laser_weapon = True
+    using_sword_weapon = True
+    weapon_level = 5
+    armor_level = ARMOR_MAX_LEVEL
+    sword_level = max(sword_level, SWORD_MAX_LEVEL)
+
+    if not blacksmith_items["weapon"].get("purchased", False):
+        blacksmith_items["weapon"]["purchased"] = True
+    blacksmith_items["weapon_upgrade"]["purchased"] = True
+
+    if not blacksmith_items["cyber_weapon"].get("purchased", False):
+        blacksmith_items["cyber_weapon"]["purchased"] = True
+        max_ammo_count += 50
+    if not blacksmith_items["cyber_armor"].get("purchased", False):
+        blacksmith_items["cyber_armor"]["purchased"] = True
+
+    max_health = 100 + (armor_level * 20)
+    if blacksmith_items["cyber_armor"]["purchased"]:
+        max_health += 50
+    health = max_health
+    current_ammo = max_ammo_count
+
+    for level_id in (0, 1, 2):
+        ammo_packs_purchased[level_id] = MAX_AMMO_PACKS
+    inventory["Ammo Packs"] = max(inventory.get("Ammo Packs", 0), MAX_AMMO_PACKS * 3)
+
+    if "buy_weapon" in quests:
+        quests["buy_weapon"]["complete"] = True
+    if "upgrade_sword" in quests:
+        quests["upgrade_sword"]["active"] = True
+    if "upgrade_laser" in quests:
+        quests["upgrade_laser"]["active"] = True
+    if "upgrade_energy_shield" in quests:
+        quests["upgrade_energy_shield"]["active"] = True
+
+    set_message("DEV: Max ammo, sword, and upgrades granted.", (120, 255, 120), 3.0)
+
+def debug_grant_collectibles():
+    """Dev helper to grant relics, keycards, and herbs."""
+    inventory.setdefault("Herbs", 0)
+    inventory["Relics"] = max(inventory.get("Relics", 0), 4)
+    inventory["Keycards"] = max(inventory.get("Keycards", 0), 6)
+    inventory["Herbs"] = max(inventory.get("Herbs", 0), 9)
+    inventory["Time Shards"] = max(inventory.get("Time Shards", 0), 3)
+    set_message(
+        f"DEV: Relics={inventory.get('Relics',0)} Keycards={inventory.get('Keycards',0)} Herbs={inventory.get('Herbs',0)} Shards={inventory.get('Time Shards',0)}",
+        (120, 255, 120),
+        3.0,
+    )
+
+
+def handle_crafting_purchase(item_id):
+    """Handle purchases from the Ruins Plaza potion shop."""
+    global invincibility_timer, invincibility_brewed, invincibility_prev_health
+
+    if item_id == "health_potion":
+        if inventory["Gold"] < HEALTH_POTION_SHOP_COST:
+            set_message("Not enough gold for Health Potion!", (255, 0, 0), 2.0)
+            return False
+        inventory["Gold"] -= HEALTH_POTION_SHOP_COST
+        inventory["Health Potions"] += 1
+        set_message("Purchased Health Potion!", (0, 255, 0), 2.0)
+        return True
+
+    if item_id == "invincibility_potion":
+        if invincibility_brewed:
+            set_message("Invincibility brew already claimed.", (255, 200, 0), 2.0)
+            return False
+        if inventory["Herbs"] < INVINCIBILITY_HERB_COST:
+            set_message("Not enough herbs for Invincibility Potion!", (255, 0, 0), 2.0)
+            return False
+        if inventory.get("Relics", 0) < 4:
+            set_message("You need 4 relics to brew this potion.", (255, 120, 120), 2.5)
+            return False
+        inventory["Herbs"] -= INVINCIBILITY_HERB_COST
+        if invincibility_timer <= 0:
+            invincibility_prev_health = int(health)
+        invincibility_timer = INVINCIBILITY_DURATION
+        invincibility_brewed = True
+        set_message("Invincible for 2 minutes!", (120, 220, 255), 2.0)
+        return True
+
+    return False
+
+
 def draw_safe_puzzle(surface):
+    """Draw the safe puzzle interface."""
     if not safe_visible:
         return
     
@@ -5154,6 +6308,7 @@ def draw_safe_puzzle(surface):
     return buttons, clear_rect, close_rect
 
 def draw_maze_puzzle(surface):
+    """Draw the maze puzzle interface."""
     if not maze_visible:
         return
     
@@ -5218,6 +6373,7 @@ def draw_maze_puzzle(surface):
     return close_rect
 
 def handle_maze_input():
+    """Handle arrow key input for maze navigation."""
     global maze_player_pos, maze_completed
     
     keys = pygame.key.get_pressed()
@@ -5269,6 +6425,7 @@ def handle_maze_input():
     return False
 
 def draw_cipher_overlay(surface):
+    """Draw the Data Hub cipher overlay when active."""
     if not cipher_visible:
         return
     
@@ -5313,6 +6470,7 @@ def draw_cipher_overlay(surface):
 
                               
 def create_button(text, x, y, width, height, hover=False):
+    """Create a button with hover effect."""
     button_color = (80, 80, 120) if not hover else (100, 100, 150)
     border_color = (150, 150, 200) if not hover else (180, 180, 220)
     
@@ -5327,6 +6485,7 @@ def create_button(text, x, y, width, height, hover=False):
     return button_rect
 
 def draw_main_menu():
+    """Draw the main menu with options."""
     screen.fill((20, 20, 40))
     
            
@@ -5412,6 +6571,7 @@ def draw_load_menu(name_text):
     return load_rect, cancel_rect
 
 def draw_how_to_play():
+    """Draw the how to play screen."""
     screen.fill((20, 20, 40))
     
            
@@ -5460,6 +6620,7 @@ def draw_how_to_play():
     return back_button
 
 def draw_about():
+    """Draw the about screen."""
     screen.fill((20, 20, 40))
     
            
@@ -5512,6 +6673,7 @@ def draw_about():
 
                         
 def collision_check(dx, dy):
+    """Handle collision with objects."""
     player_rect.x += dx
     for collider in colliders:
         if player_rect.colliderect(collider):
@@ -5529,6 +6691,7 @@ def collision_check(dx, dy):
                 player_rect.top = collider.bottom
 
 def room_transition():
+    """Handle moving between rooms."""
     level, row, col = current_room_coords
     
     if player_rect.right > SCREEN_WIDTH:
@@ -5572,6 +6735,7 @@ def room_transition():
             player_rect.left = 0
 
 def update_goblins(dt):
+    """Move goblins toward the player in the Forest Path."""
     room_key = tuple(current_room_coords)
     state = goblin_rooms.get(room_key)
     if not state:
@@ -5618,12 +6782,16 @@ def update_goblins(dt):
         goblin_rect = pygame.Rect(goblin["x"], goblin["y"], w, h)
                                                          
         if not compiler_quest_active and goblin_rect.colliderect(player_rect) and goblin_contact_cooldown <= 0:
-            health = max(0, health - GOBLIN_CONTACT_DAMAGE)
+            apply_player_damage(GOBLIN_CONTACT_DAMAGE, f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
             goblin_contact_cooldown = 0.75
-            set_message(f"-{GOBLIN_CONTACT_DAMAGE} HP (Goblin)", (255, 80, 80), 1.0)
 
 
 def update_npcs(dt):
+    """Update roaming for friendly NPCs in the current room.
+    NPCs continuously move around within their roam_radius at a slow speed.
+    They stop moving when the player is within `stop_distance` or when flagged as talking.
+    NPCs also avoid colliding with invisible barriers.
+    """
     dt_sec = dt / 1000.0
     room_key = tuple(current_room_coords)
     
@@ -5690,6 +6858,7 @@ def update_npcs(dt):
 
 
 def update_timebandits(dt):
+    """Move Time Bandits toward the player in configured cyber rooms."""
     room_key = tuple(current_room_coords)
     state = timebandit_rooms.get(room_key)
     if not state:
@@ -5772,12 +6941,11 @@ def update_timebandits(dt):
             tb["contact_cooldown"] = max(0.0, tb.get("contact_cooldown", 0.0) - dt_sec)
                                                   
             if not compiler_quest_active and tb_rect.colliderect(player_rect) and tb.get("contact_cooldown", 0.0) <= 0.0:
-                health = max(0, health - tb_damage)
-                player_electrified_timer = 3.0                             
+                if apply_player_damage(tb_damage, f"-{tb_damage} HP (Time Bandit)", (255, 80, 80), 1.2):
+                    player_electrified_timer = 3.0
                 tb["contact_cooldown"] = 0.75
                                                                  
                 goblin_contact_cooldown = 0.75
-                set_message(f"-{tb_damage} HP (Time Bandit)", (255, 80, 80), 1.2)
 
                                                              
     min_sep = (default_w + default_h) / 4
@@ -5870,11 +7038,14 @@ def update_timebandits(dt):
                 miniboss_rect = pygame.Rect(int(tb["x"]), int(tb["y"]), int(w), int(h))
                 if (sr and player_rect.colliderect(sr)) or player_rect.colliderect(miniboss_rect):
                     dmg = tb.get("damage", 5)
-                    health = max(0, health - dmg)
-                    set_message(f"-{dmg} HP (Miniboss Sword)", (255, 80, 80), 1.5)
+                    apply_player_damage(dmg, f"-{dmg} HP (Miniboss Sword)", (255, 80, 80), 1.5)
                 tb["sword_rect"] = None
 
 def pickup_items():
+    # pickup_items handles when the player walks over things in the room
+    # gold herbs potions keys keycards and timeshards are processed here
+    # sometimes this logic had bugs so we try to be defensive and not crash
+    """Handle item collection."""
     global hud_message, hud_message_timer, hud_message_color, health, player_speed_boost_timer
     
     for rect, x, y in gold_items:
@@ -5915,6 +7086,8 @@ def pickup_items():
             item_rect = pygame.Rect(item["x"], item["y"], 50, 50)
         elif itype == "keycard":
             item_rect = pygame.Rect(item["x"], item["y"], 45, 45)
+        elif itype == "relic":
+            item_rect = pygame.Rect(item["x"], item["y"], 45, 45)
         elif itype == "credit":
             item_rect = pygame.Rect(item["x"], item["y"], 20, 20)
         else:
@@ -5933,10 +7106,12 @@ def pickup_items():
             elif itype == "keycard" and key_tuple not in collected_keys:
                 try:
                     collected_keys.add(key_tuple)
+                    # Remove the keycard from the room so it disappears
                     try:
                         room_info["items"].remove(item)
                     except Exception:
                         pass
+                    # Track keycard collection and reward the player
                     inventory["Keycards"] = inventory.get("Keycards", 0) + 1
                     inventory["Gold"] += 50
                     set_message(f"+1 Keycard (Total: {inventory.get('Keycards',0)}) +50 Gold", (255, 215, 0), 2.5)
@@ -5958,8 +7133,18 @@ def pickup_items():
                 collected_timeshards.add(key_tuple)
                 set_message("+1 Time Shard!", (150, 150, 255), 2.0)
                 break
+            elif itype == "relic" and key_tuple not in collected_relics:
+                inventory["Relics"] = inventory.get("Relics", 0) + 1
+                collected_relics.add(key_tuple)
+                try:
+                    room_info["items"].remove(item)
+                except Exception:
+                    pass
+                set_message(f"+1 Relic (Total: {inventory.get('Relics',0)})", (180, 255, 220), 2.0)
+                break
 
 def set_message(text, color, duration):
+    """Helper to queue on-screen messages safely."""
     global hud_message, hud_message_timer, hud_message_color
     hud_message, hud_message_color, hud_message_timer = text, color, duration
 
@@ -5968,9 +7153,10 @@ def normalize_save_name(name):
     return cleaned.strip("_-")[:24]
 
 def save_game(save_name):
+    """Save lightweight player progress to disk."""
     global current_room_coords, player_rect, health, max_health, weapon_level, armor_level
     global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, max_ammo_count, inventory, quests
-    global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit
+    global player_sword_swinging, player_sword_angle, player_sword_cooldown, player_sword_hit, sword_level
     global boss_defeated, boss_drop_collected, boss_initialized, boss2_initialized
     try:
         normalized = normalize_save_name(save_name)
@@ -5986,6 +7172,7 @@ def save_game(save_name):
             "max_health": int(max_health),
             "weapon_level": int(weapon_level),
             "armor_level": int(armor_level),
+            "sword_level": int(sword_level),
             "player_has_weapon": bool(player_has_weapon),
             "using_laser_weapon": bool(using_laser_weapon),
             "using_sword_weapon": bool(using_sword_weapon),
@@ -6011,7 +7198,8 @@ def save_game(save_name):
         return False
 
 def load_game(save_name):
-    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress
+    """Load player progress from disk."""
+    global current_room_coords, player_rect, health, max_health, weapon_level, armor_level, game_in_progress, sword_level
     global player_has_weapon, using_laser_weapon, using_sword_weapon, current_ammo, max_ammo_count, inventory, quests
     global boss_defeated, boss_drop_collected, boss_initialized, boss2_initialized
     global game_state, dialogue_active, hud_visible, map_visible, quest_log_visible, cutscene_active
@@ -6035,9 +7223,12 @@ def load_game(save_name):
         max_health = int(payload.get("max_health", max_health))
         weapon_level = int(payload.get("weapon_level", weapon_level))
         armor_level = int(payload.get("armor_level", armor_level))
+        sword_level = int(payload.get("sword_level", sword_level))
         player_has_weapon = bool(payload.get("player_has_weapon", player_has_weapon))
         using_laser_weapon = bool(payload.get("using_laser_weapon", using_laser_weapon))
         using_sword_weapon = bool(payload.get("using_sword_weapon", using_sword_weapon))
+        if using_sword_weapon and sword_level < 1:
+            sword_level = 1
         player_sword_swinging = False
         player_sword_angle = 0.0
         player_sword_cooldown = 0.0
@@ -6045,6 +7236,7 @@ def load_game(save_name):
         current_ammo = int(payload.get("current_ammo", current_ammo))
         max_ammo_count = int(payload.get("max_ammo_count", max_ammo_count))
         inventory = dict(payload.get("inventory", inventory))
+        inventory.setdefault("Relics", 0)
         quests = dict(payload.get("quests", quests))
         boss_defeated = bool(payload.get("boss_defeated", boss_defeated))
         boss_drop_collected = bool(payload.get("boss_drop_collected", boss_drop_collected))
@@ -6074,9 +7266,14 @@ def load_game(save_name):
         return False
 
 def handle_interaction():
+    # handle_interaction is called when the player presses the interact key
+    # it looks for nearby npcs objects and opens menus or starts quests
+    # this is where dialogues shops and puzzles are triggered
+    """Handle F key interactions."""
     global dialogue_active, current_dialogue, dialogue_index, upgrade_shop_visible
     global safe_visible, safe_input, safe_unlocked, maze_visible, cyber_shop_visible, temple_shop_visible, time_guide_offer_level3
     global temple_puzzle_visible, crafting_visible, cave_relic_collected, cave_relic_available
+    global waterfall_code_puzzle_visible, waterfall_code_solved
 
     if cutscene_active or temple_puzzle_visible or crafting_visible or temple_shop_visible:
         return
@@ -6124,13 +7321,16 @@ def handle_interaction():
                                 quests["defeat_goblin_king"]["active"] = True
                                 set_message("Knight Rescued!", (0, 255, 0), 2.0)
                     else:
+                        # Other NPCs use normal dialogue
                         dialogue_key = (room_key[0], room_key[1], room_key[2], npc["id"])
                         if dialogue_key in npc_dialogues:
+                            # Special handling for the Time Guide NPC in Level 2
                             if npc.get("id") == "time_guide":
                                 required_keycards = 6
                                 required_shards = 2
                                 have_keycards = inventory.get("Keycards", 0)
                                 have_shards = inventory.get("Time Shards", 0)
+                                # debug info to help trace why offer may not appear
                                 try:
                                     print(f"[TIME_GUIDE] check - Keycards={have_keycards}, TimeShards={have_shards}")
                                 except Exception:
@@ -6209,6 +7409,7 @@ def handle_interaction():
                     set_message("The safe is already unlocked.", (200, 200, 200), 1.5)
             
             elif obj_type == "portal" and room_key == (0, 2, 2):
+                # Time Portal now requires specific items to open the gateway to Level 2.
                 required_keycards = 3
                 required_shards = 0
                 have_keycards = inventory.get("Keycards", 0)
@@ -6223,13 +7424,16 @@ def handle_interaction():
                     missing.append(f"{required_shards - have_shards} Time Shard(s)")
 
                 if not missing:
+                    # requirements met -> enter Level 2
                     enter_level_2()
                 else:
+                    # Let the (Time Guide) NPC message the player which items are missing.
+                    # Use the dialogue system so player sees the NPC-style message.
                     current_dialogue = [f"Time Guide: You are missing {', '.join(missing)}."]
                     dialogue_active = True
                     dialogue_index = 0
                     set_message("The Time Guide will open the gateway once you have the items.", (255, 200, 0), 3.0)
-            elif obj_type == "temple_shop" and room_key == (2, 0, 2):
+            elif obj_type == "temple_shop" and room_key == (2, 0, 0):
                 temple_shop_visible = True
                 return
             elif obj_type == "datahub" and room_key == (1, 0, 2):
@@ -6264,20 +7468,34 @@ def handle_interaction():
                 else:
                     set_message("The gate is already open.", (200, 200, 200), 1.5)
                 return
-            elif obj_type == "crafting_table" and room_key == (2, 1, 1):
-                if crafting_ready_confirmed:
-                    set_message("You've already confirmed your readiness.", (200, 200, 200), 1.5)
+            elif obj_type == "waterfall_code" and room_key == (2, 2, 2):
+                if not waterfall_code_solved:
+                    waterfall_code_puzzle_visible = True
+                    set_message("Enter the code from the Temple Entrance.", (150, 200, 255), 2.5)
                 else:
-                    crafting_visible = True
+                    set_message("The lock is already open.", (200, 200, 200), 1.5)
                 return
-            elif obj_type == "relic" and room_key == (2, 2, 2):
-                if cave_relic_available and not cave_relic_collected:
-                    cave_relic_collected = True
-                    cave_relic_available = False
-                    inventory["Time Shards"] = inventory.get("Time Shards", 0) + 1
-                    inventory["Gold"] += 50
-                    set_checkpoint(room_key)
-                    set_message("Relic secured! Checkpoint saved.", (180, 255, 220), 3.0)
+            elif obj_type == "crafting_table" and room_key == (2, 1, 1):
+                crafting_visible = True
+                return
+            elif obj_type == "altar" and room_key == (2, 1, 2):
+                # Temporal Altar interaction
+                interact_temporal_altar(inter_obj["x"], inter_obj["y"])
+                return
+            elif obj_type == "gorlock_altar" and room_key == (2, 2, 1):
+                if gorlock_defeated:
+                    set_message("The altar is silent. Gorlock is defeated.", (200, 200, 200), 2.0)
+                    return
+                if gorlock_boss is not None:
+                    set_message("Gorlock has already been awakened!", (255, 150, 120), 2.0)
+                    return
+                global gorlock_activated, gorlock_activation_pending
+                if inventory.get("Relics", 0) < 4:
+                    set_message("You need 4 relics to access this fight.", (255, 200, 120), 3.0)
+                    return
+                if not gorlock_activation_pending:
+                    gorlock_activation_pending = True
+                    set_message("Warning: Gorlock is extremely hard. Consider invincibility. Press Y to continue.", (255, 120, 120), 3.0)
                 return
    
     if room_key == (1, 0, 1):  
@@ -6285,8 +7503,16 @@ def handle_interaction():
             if inter_obj["type"] == "shop" and player_rect.colliderect(inter_obj["rect"].inflate(50, 50)):
                 cyber_shop_visible = True
                 return
+    
+    # Special case: Timeless Sanctuary pedestal (not in interactive_objects, but in room center)
+    if room_key == (2, 0, 2):
+        pedestal_rect = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT // 2 - 60, 100, 120)
+        if player_rect.colliderect(pedestal_rect.inflate(50, 50)):
+            interact_timeless_pedestal(pedestal_rect.centerx, pedestal_rect.centery)
+            return
 
 def give_herbs_to_collector():
+    """Handle G key to give herbs to the herb collector."""
     global dialogue_active, current_dialogue, dialogue_index
     
     room_key = tuple(current_room_coords)
@@ -6316,6 +7542,7 @@ def give_herbs_to_collector():
                     return
 
 def handle_safe_input(number):
+    """Handle number input for the safe puzzle."""
     global safe_input, safe_unlocked
     
     if len(safe_input) < 4:
@@ -6357,9 +7584,9 @@ except Exception:
                                                                                           
     pass
 
-start_background_music()
-
                                                                 
+    # main loop runs until the window is closed
+    # it processes input updates game state and draws everything
 while running:
     dt = clock.tick(60)
     keys_pressed = pygame.key.get_pressed()
@@ -6451,6 +7678,19 @@ while running:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
             elif game_state == "playing" and maze_visible:
                 close_rect = draw_maze_puzzle(screen)
+            if (game_state == "playing" and DEBUG_MODE and tuple(current_room_coords) == (2, 2, 2)
+                    and not any([upgrade_shop_visible, cyber_shop_visible, temple_shop_visible, crafting_visible,
+                                 safe_visible, maze_visible, cipher_visible, temple_puzzle_visible,
+                                 waterfall_code_puzzle_visible, waterfall_maze_visible, race_active,
+                                 dialogue_active, cutscene_active, hud_visible, quest_log_visible])):
+                if waterfall_water_dragging:
+                    waterfall_water_rect.x = mouse_pos[0] - waterfall_water_drag_offset[0]
+                    waterfall_water_rect.y = mouse_pos[1] - waterfall_water_drag_offset[1]
+                elif waterfall_water_resizing:
+                    waterfall_water_rect.width = max(40, mouse_pos[0] - waterfall_water_rect.x)
+                    waterfall_water_rect.height = max(40, mouse_pos[1] - waterfall_water_rect.y)
+                waterfall_water_rect.x = max(0, min(SCREEN_WIDTH - waterfall_water_rect.width, waterfall_water_rect.x))
+                waterfall_water_rect.y = max(0, min(SCREEN_HEIGHT - waterfall_water_rect.height, waterfall_water_rect.y))
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if game_state == "main_menu":
@@ -6499,6 +7739,15 @@ while running:
 
                 if close_rect.collidepoint(mouse_pos):
                     temple_shop_visible = False
+            elif game_state == "playing" and crafting_visible:
+                item_buttons, close_rect = draw_crafting_menu(screen)
+
+                for button_rect, item_id in item_buttons:
+                    if button_rect.collidepoint(mouse_pos):
+                        handle_crafting_purchase(item_id)
+
+                if close_rect.collidepoint(mouse_pos):
+                    crafting_visible = False
             
             elif game_state == "playing" and safe_visible:
                 buttons, clear_rect, close_rect = draw_safe_puzzle(screen)
@@ -6530,6 +7779,22 @@ while running:
                     cipher_visible = False
             elif game_state == "playing" and temple_puzzle_visible:
                 handle_temple_puzzle_click(mouse_pos)
+            elif (game_state == "playing" and DEBUG_MODE and tuple(current_room_coords) == (2, 2, 2)
+                    and not any([upgrade_shop_visible, cyber_shop_visible, temple_shop_visible, crafting_visible,
+                                 safe_visible, maze_visible, cipher_visible, temple_puzzle_visible,
+                                 waterfall_code_puzzle_visible, waterfall_maze_visible, race_active,
+                                 dialogue_active, cutscene_active, hud_visible, quest_log_visible])):
+                if event.button == 1 and waterfall_water_rect.collidepoint(mouse_pos):
+                    waterfall_water_dragging = True
+                    waterfall_water_drag_offset = (mouse_pos[0] - waterfall_water_rect.x, mouse_pos[1] - waterfall_water_rect.y)
+                elif event.button == 3 and waterfall_water_rect.collidepoint(mouse_pos):
+                    waterfall_water_resizing = True
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                waterfall_water_dragging = False
+            elif event.button == 3:
+                waterfall_water_resizing = False
         
         elif event.type == pygame.KEYDOWN:
             if game_state == "playing":
@@ -6544,6 +7809,15 @@ while running:
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
                         advance_cutscene_line()
                     continue
+                if waterfall_code_puzzle_visible:
+                    handle_waterfall_code_input(event)
+                    continue
+                if waterfall_maze_visible:
+                    if event.key == pygame.K_SPACE:
+                        handle_waterfall_maze_completion()
+                    elif event.key == pygame.K_ESCAPE:
+                        waterfall_maze_visible = False
+                    continue
                 if temple_puzzle_visible:
                     if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                         check_temple_puzzle()
@@ -6551,21 +7825,10 @@ while running:
                         temple_puzzle_visible = False
                     continue
                 if crafting_visible:
-                    if event.key == pygame.K_c:
-                        if crafting_uses_left <= 0:
-                            set_message("No crafting uses left.", (255, 200, 100), 1.5)
-                        elif inventory["Herbs"] >= 2 and inventory["Gold"] >= 1:
-                            inventory["Herbs"] -= 2
-                            inventory["Gold"] -= 1
-                            inventory["Health Potions"] += 1
-                            crafting_uses_left -= 1
-                            set_message("Potion crafted!", (180, 255, 180), 1.5)
-                        else:
-                            set_message("Not enough resources.", (255, 200, 100), 1.5)
-                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        crafting_ready_confirmed = True
-                        crafting_visible = False
-                        set_message("You are ready to continue.", (180, 255, 180), 2.0)
+                    if event.key == pygame.K_1:
+                        handle_crafting_purchase("health_potion")
+                    elif event.key == pygame.K_2:
+                        handle_crafting_purchase("invincibility_potion")
                     elif event.key == pygame.K_ESCAPE:
                         crafting_visible = False
                     continue
@@ -6630,6 +7893,7 @@ while running:
                     inventory["Health Potions"] -= 1
                     health = min(max_health, health + 30)
                     set_message("+30 Health", (0, 255, 0), 1.5)
+                
 
                 elif event.key == pygame.K_t and DEBUG_MODE:
                     set_message("DEV: Teleporting to Level 3...", (120, 255, 120), 2.0)
@@ -6646,11 +7910,13 @@ while running:
                     give_herbs_to_collector()
 
                 elif event.key == pygame.K_y and time_guide_offer_level3:
+                    # Player accepted Time Guide offer to go to Level 3
                     required_keycards = 6
                     required_shards = 2
                     inventory["Keycards"] = max(0, inventory.get("Keycards", 0) - required_keycards)
                     inventory["Time Shards"] = max(0, inventory.get("Time Shards", 0) - required_shards)
                     time_guide_offer_level3 = False
+                    # close any active dialogue and transition
                     dialogue_active = False
                     current_dialogue = []
                     set_message("Time Guide: Transporting you to Level 3...", (120, 200, 255), 3.0)
@@ -6659,11 +7925,31 @@ while running:
                     except Exception as e:
                         set_message("Error entering Level 3.", (255, 0, 0), 3.0)
                         print("enter_level_3 error:", e)
+                
+                elif event.key == pygame.K_y and gorlock_activation_pending and tuple(current_room_coords) == (2, 2, 1):
+                    gorlock_activation_pending = False
+                    gorlock_activated = True
+                    start_cutscene([
+                        "The altar thrums with violent power.",
+                        "A roar shakes the Forgotten City.",
+                        "Gorlock, the Time Eater, awakens.",
+                        "Prepare yourself."
+                    ], line_duration=2.5, on_complete=spawn_gorlock_boss)
+                
+                elif event.key == pygame.K_n and gorlock_activation_pending and tuple(current_room_coords) == (2, 2, 1):
+                    gorlock_activation_pending = False
+                    set_message("You step back from the altar.", (200, 200, 200), 2.0)
 
                 elif event.key == pygame.K_p and DEBUG_MODE:
+                    # Dev hotkey: grant enough Keycards and Time Shards to open the gateway
                     inventory["Keycards"] = max(inventory.get("Keycards", 0), 6)
                     inventory["Time Shards"] = max(inventory.get("Time Shards", 0), 2)
                     set_message("DEV: Granted 6 Keycards and 2 Time Shards.", (120, 255, 120), 3.0)
+
+                elif event.key == pygame.K_o and DEBUG_MODE:
+                    debug_grant_max_gear()
+                elif event.key == pygame.K_i and DEBUG_MODE:
+                    debug_grant_collectibles()
                 
                
                 elif event.key == pygame.K_SPACE and not upgrade_shop_visible and not dialogue_active and not safe_visible and not maze_visible and not race_active:
@@ -6737,7 +8023,7 @@ while running:
             player_facing = "left"
         
         
-        if dialogue_active or cutscene_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible or maze_visible or race_active or temple_puzzle_visible or crafting_visible or temple_shop_visible or echoes_player_frozen:
+        if dialogue_active or cutscene_active or end_scene_active or hud_visible or quest_log_visible or upgrade_shop_visible or safe_visible or maze_visible or race_active or temple_puzzle_visible or crafting_visible or temple_shop_visible or echoes_player_frozen:
             mv_x, mv_y = 0, 0
 
         if race_active:
@@ -6746,9 +8032,16 @@ while running:
        
         player_speed_boost_timer = max(0.0, player_speed_boost_timer - (dt / 1000.0))
         player_electrified_timer = max(0.0, player_electrified_timer - (dt / 1000.0))
+        was_invincible = invincibility_timer > 0.0
+        invincibility_timer = max(0.0, invincibility_timer - (dt / 1000.0))
+        if was_invincible and invincibility_timer <= 0.0 and invincibility_prev_health is not None:
+            health = min(max_health, int(invincibility_prev_health))
+            invincibility_prev_health = None
         
         speed_bonus = 3 if player_speed_boost_timer > 0 else 0
-        speed_penalty = 0.5 if player_electrified_timer > 0 else 1.0                                        
+        speed_penalty = 0.5 if player_electrified_timer > 0 else 1.0
+        if tuple(current_room_coords) == (2, 2, 2) and player_rect.colliderect(waterfall_water_rect):
+            speed_penalty *= WATERFALL_WATER_SLOW
         
         dx, dy = mv_x * (player_move_speed + speed_bonus) * speed_penalty, mv_y * (player_move_speed + speed_bonus) * speed_penalty
         
@@ -6756,7 +8049,7 @@ while running:
         update_goblins(dt)
         update_timebandits(dt)
         update_npcs(dt)
-        update_jungle_scene(dt)
+        update_jungle_spikes(dt)
         update_time_spirits(dt)
         update_cave_guardians(dt)
         update_cave_scene()
@@ -6765,6 +8058,9 @@ while running:
         update_echoes_freeze_and_laser(dt)
         update_kael_boss(dt)
         update_gorlock_boss(dt)
+        update_gorlock_activation_prompt()
+        update_waterfall_challenge(dt)
+        update_end_scene(dt)
         
                                        
         if tuple(current_room_coords) == (0, 2, 0) and boss and boss["alive"]:
@@ -6831,7 +8127,6 @@ while running:
         except Exception:
             pass
         draw_player(screen, player_rect, dt, player_moving)
-        draw_player_gun(screen, player_rect)
         draw_player_sword(screen)
         draw_player_pointer(screen, player_rect)
         
@@ -6849,10 +8144,13 @@ while running:
         draw_message(screen)
         draw_dialogue(screen)
         draw_cutscene(screen)
+        draw_end_scene(screen)
         draw_blacksmith_shop(screen)
         draw_cyber_shop(screen)
         draw_temple_shop(screen)
-        draw_enhanced_weapon_hud(screen)  
+        draw_enhanced_weapon_hud(screen)
+        draw_waterfall_code_puzzle(screen)
+        draw_waterfall_maze(screen)
 
 
         if hud_visible:
