@@ -32,8 +32,8 @@ SCREEN_HEIGHT = 800
 MAP_COLS = 3
 MAP_ROWS = 3
 TOTAL_LEVELS = 3
-DEBUG_MODE = True # this is for debugging and adding invisible barriers so that we can see where they are
-DEBUG_SKIP_LEVEL2 = True  
+DEBUG_MODE = False # this is for debugging and adding invisible barriers so that we can see where they are
+DEBUG_SKIP_LEVEL2 = False  
 SAVE_DIR = "saves"
 # Level 2 spawn point 
 LEVEL2_SPAWN_POINT = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
