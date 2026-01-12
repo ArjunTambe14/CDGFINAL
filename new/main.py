@@ -8137,7 +8137,6 @@ while running:
             pass
         draw_player(screen, player_rect, dt, player_moving)
         draw_player_sword(screen)
-        draw_player_pointer(screen, player_rect)
         
         
         draw_bullets(screen)
