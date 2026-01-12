@@ -201,7 +201,28 @@ ARMOR_MAX_LEVEL = 5
 SWORD_MAX_LEVEL = 12
     
                                                      
-ASSETS_DIR = "assets"
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+if DEBUG_MODE:
+    _asset_checks = [
+        "projectiles/timedmg.png",
+        "objects/waterfall_code.png",
+        "npcs/kael.png",
+        "objects/relic.png",
+        "objects/gorlock_altar.png",
+        "objects/crafting_table.png",
+        "npcs/cave_guardian.png",
+    ]
+    print("ASSETS_DIR:", ASSETS_DIR)
+    for _path in _asset_checks:
+        _full = os.path.join(ASSETS_DIR, _path)
+        exists = os.path.exists(_full)
+        print(f"ASSET {'OK' if exists else 'MISSING'}: {_full}")
+        if exists:
+            try:
+                pygame.image.load(_full)
+                print(f"ASSET LOAD OK: {_full}")
+            except Exception as e:
+                print(f"ASSET LOAD FAIL: {_full} -> {e!r}")
 SOUNDS_DIR = os.path.join(ASSETS_DIR, "sounds")
 image_cache = {}
 sound_cache = {}
@@ -466,7 +487,7 @@ def load_item_image(item_type):
     elif item_type == "keycard":
         return load_image(f"items/keycard.png", 45, 45)
     elif item_type == "relic":
-        return load_image(f"items/relic.png", 45, 45)
+        return load_image("objects/relic.png", 45, 45)
     elif item_type == "credit":
         return load_image(f"items/credit.png", 36, 36)
     return load_image(f"items/{item_type}.png", 25, 25)
@@ -3757,15 +3778,6 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         return rect
     if obj_type == "crafting_table":
         rect = pygame.Rect(x, y, width, height)
-        img = load_crafting_table_image()
-        if img:
-            surface.blit(img, (x, y))
-        else:
-            if DEBUG_MODE:
-                debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-                debug_surface.fill((40, 60, 40, 100))
-                surface.blit(debug_surface, (x, y))
-                pygame.draw.rect(surface, (120, 200, 140), rect, 2)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "altar":
@@ -4910,8 +4922,14 @@ def draw_kael_boss(surface):
     if room_key != (2, 1, 2):
         return
     rect = kael_boss["rect"]
-    pygame.draw.rect(surface, (60, 40, 90), rect)
-    pygame.draw.rect(surface, (160, 120, 220), rect, 3)
+    img = load_npc_image("kael")
+    if img:
+        if img.get_size() != (rect.width, rect.height):
+            img = pygame.transform.scale(img, (rect.width, rect.height))
+        surface.blit(img, rect)
+    else:
+        pygame.draw.rect(surface, (60, 40, 90), rect)
+        pygame.draw.rect(surface, (160, 120, 220), rect, 3)
     pygame.draw.circle(surface, (120, 180, 255), rect.center, rect.width // 2, 2)
 
     bar_w = rect.width + 40
