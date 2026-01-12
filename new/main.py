@@ -15,8 +15,10 @@ import json
 
 pygame.init()
                                                                          
+audio_enabled = False
 try:
     pygame.mixer.init()
+    audio_enabled = True
 except Exception:
     pass
 os.chdir(os.path.dirname(__file__) if __file__ else os.getcwd())
@@ -224,6 +226,13 @@ if DEBUG_MODE:
             except Exception as e:
                 print(f"ASSET LOAD FAIL: {_full} -> {e!r}")
 SOUNDS_DIR = os.path.join(ASSETS_DIR, "sounds")
+if audio_enabled:
+    try:
+        pygame.mixer.music.load(os.path.join(SOUNDS_DIR, "noncopyright-music-pianos-295174.mp3"))
+        pygame.mixer.music.set_volume(0.4)
+        pygame.mixer.music.play(-1)
+    except Exception as e:
+        print("bgm load/play error:", e)
 image_cache = {}
 sound_cache = {}
 
