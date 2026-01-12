@@ -493,6 +493,8 @@ def load_npc_image(npc_type):
     if npc_type in ["alchemist", "apprentice"]:
         size = get_npc_size(npc_type)
         return load_image("npcs/TempleAlchemist-removebg-preview.png", size[0], size[1])
+    if npc_type == "kael":
+        return load_image("npcs/kael.png", 120, 150)
     size = get_npc_size(npc_type)
                                                                                            
     primary = f"npcs/{npc_type}.png"
@@ -507,7 +509,23 @@ def load_npc_image(npc_type):
 
 def load_axe_image():
     """Load the boss axe image."""
-    return load_image("npcs/axe.png", 90, 50) 
+    return load_image("npcs/axe.png", 90, 50)
+
+def load_cave_guardian_image():
+    """Load cave guardian sprite."""
+    return load_image("npcs/cave_guardian.png", 36, 36)
+
+def load_waterfall_code_image():
+    """Load waterfall code lock terminal."""
+    return load_image("objects/waterfall_code.png", 100, 80)
+
+def load_gorlock_altar_image():
+    """Load Gorlock altar spawner."""
+    return load_image("objects/gorlock_altar.png", 140, 120)
+
+def load_crafting_table_image():
+    """Load crafting table interactive object."""
+    return load_image("objects/crafting_table.png", 140, 90)
 
              
 health = 100
@@ -3719,11 +3737,14 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         return rect
     if obj_type == "waterfall_code":
         rect = pygame.Rect(x, y, width, height)
-        # Draw a visible code terminal/lock
-        pygame.draw.rect(surface, (40, 60, 100), rect)
-        pygame.draw.rect(surface, (100, 150, 255), rect, 3)
-        label = small_font.render("CODE LOCK", True, (100, 200, 255))
-        surface.blit(label, (rect.centerx - label.get_width() // 2, rect.centery - 10))
+        img = load_waterfall_code_image()
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (40, 60, 100), rect)
+            pygame.draw.rect(surface, (100, 150, 255), rect, 3)
+            label = small_font.render("CODE LOCK", True, (100, 200, 255))
+            surface.blit(label, (rect.centerx - label.get_width() // 2, rect.centery - 10))
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "temple_shop":
@@ -3736,11 +3757,15 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         return rect
     if obj_type == "crafting_table":
         rect = pygame.Rect(x, y, width, height)
-        if DEBUG_MODE:
-            debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-            debug_surface.fill((40, 60, 40, 100))
-            surface.blit(debug_surface, (x, y))
-            pygame.draw.rect(surface, (120, 200, 140), rect, 2)
+        img = load_crafting_table_image()
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            if DEBUG_MODE:
+                debug_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+                debug_surface.fill((40, 60, 40, 100))
+                surface.blit(debug_surface, (x, y))
+                pygame.draw.rect(surface, (120, 200, 140), rect, 2)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     if obj_type == "altar":
@@ -3755,9 +3780,13 @@ def draw_object(x, y, obj_type, surface, level, width=None, height=None):
         return rect
     if obj_type == "gorlock_altar":
         rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, (50, 20, 20), rect)
-        pygame.draw.rect(surface, (200, 80, 80), rect, 3)
-        pygame.draw.circle(surface, (255, 120, 120), rect.center, max(12, rect.width // 4), 2)
+        img = load_gorlock_altar_image()
+        if img:
+            surface.blit(img, (x, y))
+        else:
+            pygame.draw.rect(surface, (50, 20, 20), rect)
+            pygame.draw.rect(surface, (200, 80, 80), rect, 3)
+            pygame.draw.circle(surface, (255, 120, 120), rect.center, max(12, rect.width // 4), 2)
         interactive_objects.append({"rect": rect, "type": obj_type, "x": x, "y": y})
         return rect
     elif obj_type == "shop":
@@ -4233,9 +4262,13 @@ def draw_cave_guardians(surface):
         if not guardian.get("alive", True):
             continue
         x, y = int(guardian["x"]), int(guardian["y"])
-        pygame.draw.circle(surface, (200, 80, 80), (x, y), 20)
-        pygame.draw.circle(surface, (120, 40, 40), (x, y), 12)
-        pygame.draw.circle(surface, (240, 200, 200), (x, y), 22, 2)
+        img = load_cave_guardian_image()
+        if img:
+            surface.blit(img, (x - 18, y - 18))
+        else:
+            pygame.draw.circle(surface, (200, 80, 80), (x, y), 20)
+            pygame.draw.circle(surface, (120, 40, 40), (x, y), 12)
+            pygame.draw.circle(surface, (240, 200, 200), (x, y), 22, 2)
 
 def update_jungle_scene(dt):
     """Update jungle traps and exit trigger."""
